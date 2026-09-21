@@ -165,7 +165,7 @@ export default function Login() {
         setLockSeconds(err.retryAfter);
       } else {
         setFailure(err.message);
-        setFailureTone(err.code === 'access_expired' ? 'warning' : 'error');
+        setFailureTone(err.code ? 'warning' : 'error'); // con código: acceso vencido o cuenta bloqueada
         setFocusTick((t) => t + 1);
       }
     }

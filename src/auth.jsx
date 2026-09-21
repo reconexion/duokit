@@ -15,7 +15,7 @@ export function AuthProvider({ children }) {
       .then(async (res) => {
         const data = await res.json().catch(() => null);
         if (res.ok) return data;
-        if (data?.code === 'access_expired' && !cancelled) setNotice({ message: data.error, tone: 'warning' });
+        if (data?.code && !cancelled) setNotice({ message: data.error, tone: 'warning' });
         return null;
       })
       .then((data) => !cancelled && setUser(data?.user ?? null))
@@ -32,8 +32,9 @@ export function AuthProvider({ children }) {
       const detail = event.detail || {};
       setUser((current) => {
         if (current) {
+          // Con código (acceso vencido, cuenta bloqueada, sesión abierta en otro lado) el servidor explica el motivo.
           setNotice(
-            detail.code === 'access_expired'
+            detail.code
               ? { message: detail.error, tone: 'warning' }
               : { message: 'Tu sesión terminó. Inicia sesión de nuevo para continuar.', tone: 'info' },
           );

@@ -3,11 +3,15 @@ import { LogOut01 } from '@untitledui/icons';
 import { Avatar } from '@/components/base/avatar/avatar';
 import { Badge } from '@/components/base/badges/badges';
 import { Button } from '@/components/base/buttons/button';
+import Admin from './Admin';
+import Landing from './Landing';
+import Legal from './Legal';
 import Pattern from './Pattern';
 import Downloader from './Downloader';
 import Login from './Login';
 import { accessInfo } from './access';
 import { AuthProvider, useAuth } from './auth';
+import { currentRoute } from './route';
 
 const initialsOf = (name = '') =>
   name
@@ -19,16 +23,17 @@ const initialsOf = (name = '') =>
 
 function UserBar() {
   const { user, logout } = useAuth();
-  const access = accessInfo(user.expiresAt);
+  // Sin fecha de vencimiento (plan Permanente o administrador) se muestra "Acceso permanente".
+  const access = user.expiresAt
+    ? accessInfo(user.expiresAt)
+    : { label: user.role === 'admin' ? 'Administrador' : 'Acceso permanente', tone: 'brand', title: 'Tu acceso a duokit no vence.' };
   return (
     <div className="mb-8 flex w-full flex-wrap items-center justify-end gap-x-3 gap-y-2">
-      {access && (
-        <span title={access.title}>
-          <Badge size="md" color={access.tone}>
-            {access.label}
-          </Badge>
-        </span>
-      )}
+      <span title={access.title}>
+        <Badge size="md" color={access.tone}>
+          {access.label}
+        </Badge>
+      </span>
       <div className="flex items-center gap-2.5">
         <Avatar size="sm" initials={initialsOf(user.name)} alt={user.name} />
         <div className="hidden min-w-0 flex-col leading-tight sm:flex">
@@ -36,6 +41,11 @@ function UserBar() {
           <span className="truncate text-xs text-tertiary">{user.username}</span>
         </div>
       </div>
+      {user.role === 'admin' && (
+        <Button size="sm" color="tertiary" href="/admin">
+          Panel
+        </Button>
+      )}
       <Button size="sm" color="secondary" iconLeading={LogOut01} onPress={logout}>
         Cerrar sesión
       </Button>
@@ -91,15 +101,28 @@ function CornerMascot() {
   );
 }
 
-export default function App() {
+function AppPage() {
   return (
     <AuthProvider>
       <Pattern />
       <main className="mx-auto flex min-h-screen w-full max-w-4xl flex-col items-center px-4 pt-6 pb-16 sm:pt-8">
         <Content />
       </main>
-
       <CornerMascot />
     </AuthProvider>
   );
+}
+
+export default function App() {
+  const route = currentRoute();
+  if (route === 'admin') {
+    return (
+      <AuthProvider>
+        <Admin />
+      </AuthProvider>
+    );
+  }
+  if (route === 'app') return <AppPage />;
+  if (route === 'legal') return <Legal />;
+  return <Landing />;
 }

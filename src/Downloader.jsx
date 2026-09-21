@@ -21,9 +21,11 @@ import { FeaturedIcon } from '@/components/foundations/featured-icon/featured-ic
 import { AnimatedCounter } from '@/components/ui/animated-counter';
 import { cx } from '@/utils/cx';
 import { apiFetch } from './api';
+import { useAuth } from './auth';
 import { useJobPoller } from './useJobPoller';
 
-const VIDEO_QUALITY_OPTIONS = ['480p', '720p', '1080p', '2K', '4K'].map((id) => ({ id, label: id }));
+// Altura en píxeles de cada calidad: el plan del usuario define hasta cuál puede elegir.
+const VIDEO_HEIGHTS = { '480p': 480, '720p': 720, '1080p': 1080, '2K': 1440, '4K': 2160 };
 const AUDIO_QUALITY_OPTIONS = ['64k', '128k', '192k', '256k', '320k'].map((id) => ({ id, label: `${id}bps` }));
 
 const AUDIO_LANG_OPTIONS = [
@@ -52,16 +54,6 @@ function normalizeTime(value) {
   const [s, m = 0, h = 0] = parts.map(Number).reverse();
   if (m > 59 || s > 59) return null;
   return [h, m, s].map((n) => String(n).padStart(2, '0')).join(':');
-}
-
-function friendlyError(raw = '') {
-  if (/precondition|not available|sign in|unable to extract/i.test(raw)) {
-    return 'YouTube cambió algo y yt-dlp quedó desactualizado. Actualízalo e inténtalo de nuevo.';
-  }
-  if (/no se pudo ejecutar yt-dlp/i.test(raw)) {
-    return 'No encuentro yt-dlp en tu equipo. Instálalo y vuelve a intentarlo.';
-  }
-  return 'Revisa el enlace e inténtalo de nuevo.';
 }
 
 const FILE_KIND = {
@@ -142,7 +134,14 @@ export default function Downloader() {
   const [qualAud, setQualAud] = useState('192k');
   const [audioLang, setAudioLang] = useState('original');
   const [errors, setErrors] = useState({});
-  const [failure, setFailure] = useState(null);
+  const [failure, setFailure] = useState(null); // { friendly }
+  const { user } = useAuth();
+  const videoQualityOptions = Object.entries(VIDEO_HEIGHTS).map(([id, height]) => ({
+    id,
+    label: id,
+    isDisabled: height > user.maxHeight,
+    supportingText: height > user.maxHeight ? 'Plan Permanente' : undefined,
+  }));
 
   const job = useJobPoller();
   const locked = job.isRunning;
@@ -218,15 +217,18 @@ export default function Downloader() {
 
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
-        throw new Error(data.error || 'No se pudo iniciar la descarga.');
+        // Mensaje del servidor (límite del plan, demasiado rápido...): ya viene listo para mostrarse.
+        const rejection = new Error(data.error || 'No se pudo iniciar la descarga.');
+        rejection.ready = true;
+        throw rejection;
       }
 
       const data = await res.json();
       job.start(data.jobId, {
-        onError: (d) => setFailure(d.error || 'La descarga falló.'),
+        onError: (d) => setFailure({ friendly: d.error || 'La descarga falló. Inténtalo de nuevo.' }),
       });
     } catch (err) {
-      setFailure(err.message);
+      setFailure({ friendly: err.ready ? err.message : 'No pudimos conectar con el servidor. Revisa tu conexión e inténtalo de nuevo.' });
     }
   };
 
@@ -312,9 +314,10 @@ export default function Downloader() {
                 selectedKey={qualVid}
                 onSelectionChange={(key) => setQualVid(String(key))}
                 isDisabled={locked}
-                items={VIDEO_QUALITY_OPTIONS}
+                items={videoQualityOptions}
+                hint={user.maxHeight < VIDEO_HEIGHTS['4K'] ? `Tu plan ${user.planName} llega hasta ${user.qualityLabel}.` : undefined}
               >
-                {(item) => <Select.Item id={item.id} label={item.label} />}
+                {(item) => <Select.Item id={item.id} label={item.label} isDisabled={item.isDisabled} supportingText={item.supportingText} />}
               </Select>
             )}
             {dlAud && (
@@ -434,11 +437,7 @@ export default function Downloader() {
           <FeaturedIcon icon={AlertCircle} color="error" theme="light" size="sm" className="shrink-0" />
           <div className="flex min-w-0 flex-col gap-1">
             <p className="text-sm font-semibold text-error-primary">No se pudo descargar</p>
-            <p className="text-sm text-secondary">{friendlyError(failure)}</p>
-            <details className="text-xs text-tertiary">
-              <summary className="cursor-pointer select-none">Ver detalle técnico</summary>
-              <pre className="mt-2 max-h-32 overflow-auto rounded-md bg-primary p-2 break-words whitespace-pre-wrap">{failure}</pre>
-            </details>
+            <p className="text-sm text-secondary">{failure.friendly}</p>
           </div>
         </div>
       )}
