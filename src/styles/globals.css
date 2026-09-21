@@ -1,0 +1,122 @@
+@import "tailwindcss";
+@import "./theme.css";
+@import "./typography.css";
+
+@plugin "@tailwindcss/typography";
+@plugin "tailwindcss-react-aria-components";
+@plugin "tailwindcss-animate";
+
+@custom-variant dark (&:where(.dark-mode, .dark-mode *));
+@custom-variant label (& [data-label]);
+@custom-variant focus-input-within (&:has(input:focus));
+
+@utility scrollbar-hide {
+    /* For Webkit-based browsers (Chrome, Safari and Opera) */
+    &::-webkit-scrollbar {
+        display: none;
+        -webkit-appearance: none;
+    }
+
+    /* For IE, Edge and Firefox */
+    -ms-overflow-style: none; /* IE and Edge */
+    scrollbar-width: none; /* Firefox */
+}
+
+@utility transition-inherit-all {
+    transition-property: inherit;
+    transition-duration: inherit;
+    transition-timing-function: inherit;
+}
+
+html,
+body {
+    font-family: var(--font-body);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    -webkit-font-variant-ligatures: contextual;
+    font-variant-ligatures: contextual;
+    -webkit-font-kerning: normal;
+    font-kerning: normal;
+}
+
+/* Hide the default expand arrow on Safari.  */
+details summary::-webkit-details-marker {
+    display: none;
+}
+
+/* Hide default arrows from number inputs. */
+/* Chrome, Safari, Edge, Opera */
+input::-webkit-outer-spin-button,
+input::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}
+/* Firefox */
+input[type="number"] {
+    -moz-appearance: textfield;
+}
+
+/* Hide the default clear button (X) from search inputs. */
+input[type="search"]::-webkit-search-cancel-button {
+    -webkit-appearance: none;
+}
+
+/* Hide the default outline on chart elements. */
+.recharts-surface,
+.recharts-surface g,
+.recharts-surface path {
+    outline: none;
+}
+
+/* El fondo animado (Pattern) va detrás de todo: el body no debe taparlo. */
+body {
+    background: transparent;
+    color: var(--color-text-primary);
+}
+
+/* Sacudida corta cuando el login falla (se apaga con "reducir movimiento"). */
+@keyframes duokit-shake {
+    10%, 90% { transform: translateX(-1px); }
+    20%, 80% { transform: translateX(2px); }
+    30%, 50%, 70% { transform: translateX(-4px); }
+    40%, 60% { transform: translateX(4px); }
+}
+.animate-shake {
+    animation: duokit-shake 0.45s cubic-bezier(0.36, 0.07, 0.19, 0.97) both;
+}
+@media (prefers-reduced-motion: reduce) {
+    .animate-shake { animation: none; }
+}
+
+/* Animación de bienvenida tras un inicio de sesión correcto.
+   Orden: el panel se cubre, aparece el círculo con una onda, se dibuja la palomita,
+   sube el saludo y al final la tarjeta se desvanece. */
+@keyframes duokit-fade-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes duokit-pop {
+    0% { transform: scale(0.4); opacity: 0; }
+    60% { transform: scale(1.12); opacity: 1; }
+    100% { transform: scale(1); opacity: 1; }
+}
+@keyframes duokit-draw { to { stroke-dashoffset: 0; } }
+@keyframes duokit-ripple {
+    0% { transform: scale(1); opacity: 0.4; }
+    100% { transform: scale(2.2); opacity: 0; }
+}
+@keyframes duokit-rise {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: none; }
+}
+@keyframes duokit-card-out { to { opacity: 0; transform: translateY(-10px) scale(0.985); } }
+
+.welcome-overlay { animation: duokit-fade-in 0.25s ease-out both; }
+.welcome-ripple { animation: duokit-ripple 0.95s ease-out 0.4s both; }
+.welcome-badge { animation: duokit-pop 0.5s cubic-bezier(0.2, 0.9, 0.3, 1.2) 0.1s both; }
+.welcome-check { stroke-dasharray: 30; stroke-dashoffset: 30; animation: duokit-draw 0.4s ease-out 0.5s forwards; }
+.welcome-text { animation: duokit-rise 0.4s ease-out 0.7s both; }
+.welcome-card-out { animation: duokit-card-out 0.35s ease-in 1.15s forwards; }
+
+@media (prefers-reduced-motion: reduce) {
+    .welcome-overlay, .welcome-ripple, .welcome-badge, .welcome-text, .welcome-card-out { animation: none; }
+    .welcome-ripple { display: none; }
+    .welcome-check { animation: none; stroke-dashoffset: 0; }
+}

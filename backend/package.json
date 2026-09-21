@@ -1,0 +1,13 @@
+{
+  "name": "yt-dlp-backend",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Backend local que ejecuta yt-dlp para el Descargador de YouTube",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.19.2"
+  }
+}
