@@ -1,56 +1,82 @@
 # duokit
 
-Descargador de YouTube: descarga video/audio/miniatura de YouTube (con recorte opcional por tiempo)
-usando `yt-dlp`. Frontend React + Vite + Tailwind y backend local
-Node.js/Express que ejecuta `yt-dlp` sin concatenar comandos (args como arreglo).
+Descargador de YouTube (video, audio y miniatura, con recorte por tiempo) que se vende por suscripción:
+los clientes compran por **Telegram**, pagan por **transferencia SPEI** y reciben su acceso automáticamente.
 
-## Requisitos
+- **Frontend:** React + Vite + Tailwind + Untitled UI.
+- **Backend:** Node.js/Express + `yt-dlp`. Sin base de datos: todo en archivos JSON dentro de `backend/data/`.
+- **Rutas:** `/` página pública (landing) · `/app` la aplicación · `/admin` panel del administrador.
 
-- `yt-dlp` y `ffmpeg` en el `PATH`.
-- `npm install && npm install --prefix backend`
+## Puesta en marcha
 
-## Uso
+Requisitos: `yt-dlp` y `ffmpeg` en el `PATH`, y Node 22.
 
 ```bash
-npm start   # backend en :3001 + Vite en :5173
+npm install && npm install --prefix backend
+cp backend/.env.example backend/.env     # y rellena el token (ver abajo)
+npm run user:admin                       # crea el administrador (muestra su contraseña una sola vez)
+npm start                                # backend en :3001 + Vite en :5173
 ```
 
-Los archivos llegan por la descarga normal del navegador (barra de descargas); no se guardan en el proyecto.
+### 1. Crear el bot de Telegram
+1. En Telegram habla con **@BotFather** → `/newbot` → elige nombre y usuario del bot.
+2. Copia el token que te da y pégalo en `backend/.env` como `TELEGRAM_BOT_TOKEN=...`.
+3. Reinicia (`npm start`). En la consola debe salir `Bot de Telegram activo: @tu_bot`.
+4. **Desde la cuenta @tostilocos**, escríbele `/start` al bot. Así el bot sabe a qué chat mandarte los avisos de pago.
+5. (Opcional) En `.env`, `PUBLIC_URL` es la dirección pública de la app: aparece en el mensaje con el acceso del cliente.
+6. Para que los botones de la landing lleven al bot (y no a tu perfil), crea un archivo `.env` en la raíz del proyecto con
+   `VITE_TELEGRAM_URL=https://t.me/el_usuario_de_tu_bot` y reinicia. Las compras y las contraseñas van siempre por el chat
+   privado con el bot, nunca en un grupo.
 
-## Interfaz
+### 2. Flujo de una venta
+1. El cliente escribe `/comprar` y elige plan. La primera vez el bot le pide su **nombre completo** (como aparece en su banco);
+   así, en tu estado de cuenta reconoces quién pagó. Ese nombre es el que se muestra en su cuenta y en el recibo. Después el bot le da la referencia (`DUO-2026-001`, `-002`...) con el texto
+   *"Transfiere $129.00 MXN a esta tarjeta de débito: <tu cuenta> con referencia: DUO-2026-001"* y su **recibo en PDF**.
+2. Te llega un aviso por Telegram ("Pago pendiente", con su nombre y su @usuario) y aparece en `/admin`. Si el cliente toca "Ya pagué", te avisa otra vez.
+3. Cuando ves la transferencia, la confirmas: botón **Confirmar** en `/admin` o `/confirmar DUO-2026-001 129` en el bot
+   (el monto es lo que te llegó al banco; si no coincide con el del plan, el bot no activa nada).
+4. Se crea el usuario (o se renueva el existente), y el cliente recibe usuario, contraseña y el recibo pagado por Telegram.
 
-- Componentes de [Untitled UI](https://www.untitledui.com/react/components) (botón, inputs, select, checkbox, progreso) en `src/components/base/`.
-- [Animated Counter](https://www.rareui.com/components) de RareUI en `src/components/ui/` (porcentaje de progreso).
-- [`page-mascot`](https://koboyo.com/page-mascot): el koala de `public/mascots/`.
-- Fondo animado en `src/Pattern.jsx`.
+Comandos del bot: `/comprar` `/estado` `/recuperar` (contraseña nueva) `/ayuda`. Del administrador: `/pendientes` `/confirmar REF MONTO`.
 
-## Usuarios (inicio de sesión)
+## Planes y límites
 
-No hay registro público: los usuarios los crea quien administra duokit. El usuario va en minúsculas (3 a 32 caracteres: letras, números, punto, guion o guion bajo).
+| | Básico | Permanente |
+|---|---|---|
+| Precio | $129 MXN/mes | $2,999 MXN único |
+| Acceso | 30 días (renovar suma 30 más) | De por vida |
+| Calidad | hasta 1080p | hasta 4K |
+| Descargas por día | 30 | 150 |
+
+Todo esto se cambia en `backend/plans.js`. Protecciones anti-abuso (también ahí):
+- Máximo **5 descargas por minuto** por usuario (`429`).
+- Tope **diario** por plan (`429`, se reinicia a medianoche del servidor).
+- Máximo **2 sesiones a la vez** por cuenta: al abrir una tercera se cierra la más antigua.
+- **Bloqueo automático** al chocar con un límite 5 veces en 24 h (los choques con el tope por minuto cuentan una vez por minuto; con el tope diario, una vez por hora). Te avisa por Telegram y lo puedes desbloquear en `/admin` (al desbloquear se borran sus choques).
+- **Protección del servidor** (también en `backend/plans.js`): máximo 2 descargas a la vez por usuario y 4 en todo el servidor, cada descarga se cancela a los 20 min, no se bajan transmisiones en vivo, archivos de más de 2 GB ni videos de más de 3 h (con el recorte por tiempo sí se puede bajar un fragmento de un video largo).
+- **Auditoría:** `backend/data/audit.log` guarda una línea por descarga (usuario, IP, enlace, calidad), inicio de sesión, pago y bloqueo.
+
+## Panel de administración (`/admin`)
+
+Entras con el usuario `admin`. Muestra ingresos totales, usuarios activos, descargas (hoy y total), pagos pendientes con
+**Confirmar/Cancelar**, todos los usuarios (plan, vencimiento, estado, descargas de hoy) con **Bloquear/Desbloquear**, y los últimos pagos.
+
+## Usuarios desde la terminal
 
 ```bash
-npm run user:add      # pide usuario (para entrar), nombre (el que se muestra) y contraseña (mín. 8)
+npm run user:add                              # crea un usuario a mano (usuario, nombre, vencimiento, plan)
 npm run user:list
-npm run user:expire -- ana 2026-12-31   # cambia el último día de acceso (o `nunca`)
-npm run user:remove -- ana
+npm run user:passwd -- cliente1                    # cambia una contraseña (también la del admin)
+npm run user:expire -- cliente1 2026-12-31         # último día de acceso (o `nunca`)
+npm run user:remove -- cliente1
 ```
 
-- Los usuarios se guardan en `backend/data/users.json` con la contraseña cifrada
-  (scrypt). Ese archivo y `backend/data/secret.key` (firma de las sesiones) no
-  se deben compartir ni subir a git.
-- La sesión va en una cookie `httpOnly` que se borra al cerrar el navegador y vence a las 24 horas
-  (`SESSION_HOURS` en `backend/auth.js`).
-- Tras 5 intentos fallidos con el mismo usuario se bloquea el acceso 15 minutos.
-- Cada usuario puede tener una **fecha límite de acceso** (`AAAA-MM-DD` = último día en que puede
-  entrar, hasta las 23:59 hora del servidor). Pasada esa fecha no puede iniciar sesión y, si ya tenía
-  la sesión abierta, la siguiente acción lo devuelve al login con el aviso. Sin fecha = sin vencimiento.
-- En la app se muestra arriba a la derecha: "Acceso hasta el 31 dic 2026", y en amarillo
-  ("Tu acceso vence en 5 días") durante la última semana.
+## Datos y seguridad
 
-## Cómo llegan los archivos
-
-Al terminar, el navegador inicia solo la descarga de cada archivo y aparece en su barra de descargas.
-`yt-dlp` los prepara en una carpeta temporal fuera del proyecto (`~/.cache/duokit/jobs/`, configurable con
-`DUOKIT_TMP_DIR`), donde quedan 10 minutos por si hay que repetir la descarga (`DUOKIT_FILE_TTL_MS`).
-Después se borran solos, y también al apagar el backend. Cada usuario solo puede bajar sus propios archivos.
-# duokit
+- `backend/data/` (usuarios, pagos, sesiones, auditoría, clave de firma) y `backend/.env` **no se suben a git** ni se comparten.
+- Contraseñas con `scrypt`; sesión en cookie `httpOnly`; peticiones de otros sitios rechazadas; 5 intentos de login fallidos (por cuenta y desde la misma IP) bloquean 15 min; el intento se cuenta al instante, así que una ráfaga simultánea tampoco se cuela.
+- El administrador se reconoce por su **ID numérico** de Telegram (se fija solo la primera vez que `@tostilocos` le escribe al bot, o lo pones en `ADMIN_TELEGRAM_ID`), no por su @usuario.
+- Al pedir `/recuperar` se cierran todas las sesiones abiertas de esa cuenta.
+- Los archivos descargados no se guardan en el proyecto: llegan por la descarga del navegador y se borran solos a los 10 minutos
+  (`~/.cache/duokit/jobs/`).
+- Detrás de nginx/Cloudflare pon `TRUST_PROXY=1` en `backend/.env` para ver la IP real del cliente, y sirve todo por HTTPS.

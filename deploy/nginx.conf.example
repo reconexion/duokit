@@ -1,0 +1,69 @@
+# /etc/nginx/sites-available/duokit  (cambia "tudominio.com" por tu dominio)
+# NO PROBADO: nginx no estaba instalado donde se preparó. Pruébalo con `nginx -t` antes de recargar.
+#
+# Sirve el frontend compilado (carpeta dist/) y reenvía /api y /downloads al backend, que solo escucha en 127.0.0.1:3001.
+# Con este proxy delante hay que poner TRUST_PROXY=1 en backend/.env (el backend debe ser alcanzable SOLO a través de nginx).
+
+limit_req_zone $binary_remote_addr zone=duokit_login:10m rate=30r/m;
+
+server {
+    listen 80;
+    server_name tudominio.com;
+    return 301 https://$host$request_uri;
+}
+
+server {
+    listen 443 ssl;
+    http2 on;
+    server_name tudominio.com;
+
+    # Certificados de Let's Encrypt (sudo certbot --nginx -d tudominio.com)
+    ssl_certificate     /etc/letsencrypt/live/tudominio.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/tudominio.com/privkey.pem;
+
+    root /opt/duokit/dist;
+    index index.html;
+
+    add_header Strict-Transport-Security "max-age=31536000" always;
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header X-Frame-Options "DENY" always;
+    add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+
+    client_max_body_size 16k;   # la API solo recibe JSON pequeño
+
+    # Freno extra a los intentos de login (el backend ya tiene el suyo).
+    location = /api/auth/login {
+        limit_req zone=duokit_login burst=10 nodelay;
+        include /etc/nginx/duokit-proxy.conf;
+        proxy_pass http://127.0.0.1:3001;
+    }
+
+    location /api/ {
+        include /etc/nginx/duokit-proxy.conf;
+        proxy_pass http://127.0.0.1:3001;
+    }
+
+    # Archivos descargados: pueden pesar cientos de MB, sin buffer intermedio.
+    location /downloads/ {
+        include /etc/nginx/duokit-proxy.conf;
+        proxy_pass http://127.0.0.1:3001;
+        proxy_buffering off;
+        proxy_read_timeout 600s;
+    }
+
+    # Los archivos compilados llevan hash en el nombre: se pueden guardar para siempre.
+    location /assets/ {
+        add_header Cache-Control "public, max-age=31536000, immutable";
+        try_files $uri =404;
+    }
+
+    # Rutas de la app (/app, /admin, /legal): siempre el mismo index.html.
+    location / {
+        try_files $uri /index.html;
+    }
+}
+
+# /etc/nginx/duokit-proxy.conf  (archivo aparte, incluido arriba):
+#   proxy_set_header Host $host;
+#   proxy_set_header X-Forwarded-For $remote_addr;     # se SOBRESCRIBE: el cliente no puede falsificar su IP
+#   proxy_set_header X-Forwarded-Proto $scheme;

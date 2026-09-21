@@ -1,0 +1,11 @@
+# /etc/systemd/system/duokit-backup.service — la dispara duokit-backup.timer
+[Unit]
+Description=Respaldo de los datos de duokit
+
+[Service]
+Type=oneshot
+User=duokit
+Group=duokit
+ExecStart=/opt/duokit/deploy/backup.sh
+# Para tener también una copia fuera del servidor, descomenta y ajusta:
+# Environment=REMOTE_COPY=usuario@otro-servidor:/respaldos/duokit/

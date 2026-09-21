@@ -1,0 +1,10 @@
+# /etc/systemd/system/duokit-backup.timer
+[Unit]
+Description=Respaldo diario de los datos de duokit
+
+[Timer]
+OnCalendar=*-*-* 03:30:00
+Persistent=true
+
+[Install]
+WantedBy=timers.target

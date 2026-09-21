@@ -1,0 +1,35 @@
+# /etc/systemd/system/duokit-backend.service
+# Ajusta User, rutas y la ubicación de node (`which node`) a tu servidor.
+[Unit]
+Description=duokit backend (API, yt-dlp y bot de Telegram)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=duokit
+Group=duokit
+WorkingDirectory=/opt/duokit/backend
+ExecStart=/usr/bin/node server.js
+Restart=always
+RestartSec=3
+
+Environment=NODE_ENV=production
+Environment=TZ=America/Mexico_City
+Environment=HOST=127.0.0.1
+Environment=PORT=3001
+# Ruta donde están yt-dlp y ffmpeg (yt-dlp instalado con pipx vive en ~/.local/bin del usuario).
+Environment=PATH=/usr/local/bin:/usr/bin:/bin:/home/duokit/.local/bin
+# Carpeta de trabajo de las descargas y caché de yt-dlp (systemd la crea en /var/cache/duokit).
+CacheDirectory=duokit
+Environment=XDG_CACHE_HOME=/var/cache/duokit
+
+# Endurecimiento
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectKernelTunables=true
+ProtectControlGroups=true
+
+[Install]
+WantedBy=multi-user.target

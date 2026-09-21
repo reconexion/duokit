@@ -10,6 +10,8 @@
     "start": "bash start.sh",
     "user:add": "node backend/scripts/users.js add",
     "user:list": "node backend/scripts/users.js list",
+    "user:passwd": "node backend/scripts/users.js passwd",
+    "user:admin": "node backend/scripts/users.js admin",
     "user:expire": "node backend/scripts/users.js expire",
     "user:remove": "node backend/scripts/users.js remove"
   },
