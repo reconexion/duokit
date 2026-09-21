@@ -1,12 +1,21 @@
 const express = require('express');
+require('./config'); // primero: fija la zona horaria antes de cualquier fecha
 const auth = require('./auth');
+const audit = require('./audit');
+const limits = require('./limits');
+const health = require('./health');
+const { LIMITS } = require('./plans');
+const telegram = require('./telegram');
+const adminRouter = require('./admin');
 const { spawn } = require('child_process');
 const path = require('path');
 const fs = require('fs');
 const crypto = require('crypto');
 const os = require('os');
 
-const PORT = 3001;
+const PORT = Number(process.env.PORT) || 3001;
+// Solo escucha en este equipo: al público lo atiende el proxy (nginx) o el proxy de Vite. Para exponerlo directamente: HOST=0.0.0.0.
+const HOST = process.env.HOST || '127.0.0.1';
 
 // Los archivos no se guardan en el proyecto: yt-dlp los prepara en una carpeta temporal fuera de él,
 // el navegador los recibe como una descarga normal y se borran solos pasado FILE_TTL_MS.
@@ -21,9 +30,22 @@ const app = express();
 // Sin CORS: el frontend habla con este backend por el mismo origen (proxy de Vite),
 // así la cookie de sesión nunca viaja a otros sitios.
 app.disable('x-powered-by');
+// Detrás de un proxy inverso (nginx, Cloudflare...) hay que decirlo para ver la IP real del cliente: TRUST_PROXY=1.
+if (process.env.TRUST_PROXY) app.set('trust proxy', /^\d+$/.test(process.env.TRUST_PROXY) ? Number(process.env.TRUST_PROXY) : process.env.TRUST_PROXY);
 app.use((req, res, next) => {
   res.setHeader('X-Content-Type-Options', 'nosniff');
   res.setHeader('Cache-Control', 'no-store');
+  next();
+});
+// Si llegan peticiones reenviadas por un proxy externo pero TRUST_PROXY no está puesto, todos los clientes se ven con la
+// misma IP (los límites por IP se mezclan). El proxy de Vite en local reenvía desde 127.0.0.1 y no cuenta.
+let warnedProxy = false;
+app.use((req, res, next) => {
+  const forwarded = String(req.headers['x-forwarded-for'] || '').split(',')[0].trim();
+  if (!warnedProxy && !process.env.TRUST_PROXY && forwarded && !/^(::1|::ffff:127\.|127\.)/.test(forwarded)) {
+    warnedProxy = true;
+    console.warn('AVISO: llegan peticiones con X-Forwarded-For pero TRUST_PROXY no está configurado en backend/.env; todos los clientes se verán con la IP del proxy.');
+  }
   next();
 });
 app.use(express.json({ limit: '10kb' }));
@@ -75,19 +97,21 @@ function validatePayload(body) {
   if (!downloadVideo && !downloadAudio && !downloadThumbnail) {
     errors.push('Debes seleccionar al menos una opción de descarga.');
   }
-  if (downloadVideo && !VIDEO_QUALITY_MAP[videoQuality]) {
+  // Solo cadenas, y `hasOwn` para que claves como "constructor" o "__proto__" no cuenten como una calidad.
+  const isText = (value) => typeof value === 'string';
+  if (downloadVideo && !(isText(videoQuality) && Object.hasOwn(VIDEO_QUALITY_MAP, videoQuality))) {
     errors.push('Calidad de video inválida.');
   }
-  if (downloadAudio && !AUDIO_QUALITY_SET.has(audioQuality)) {
+  if (downloadAudio && !(isText(audioQuality) && AUDIO_QUALITY_SET.has(audioQuality))) {
     errors.push('Calidad de audio inválida.');
   }
-  if (audioLang && !AUDIO_LANG_SET.has(audioLang)) {
+  if (audioLang && !(isText(audioLang) && AUDIO_LANG_SET.has(audioLang))) {
     errors.push('Idioma de audio inválido.');
   }
-  if (startTime && !TIME_REGEX.test(startTime)) {
+  if (startTime && !(isText(startTime) && TIME_REGEX.test(startTime))) {
     errors.push('Formato de tiempo de inicio inválido.');
   }
-  if (endTime && !TIME_REGEX.test(endTime)) {
+  if (endTime && !(isText(endTime) && TIME_REGEX.test(endTime))) {
     errors.push('Formato de tiempo de finalización inválido.');
   }
 
@@ -110,6 +134,14 @@ function audioSelector(config, extraFilter = '') {
   return `bestaudio${extraFilter}`;
 }
 
+// Protección del servidor: nada de transmisiones en vivo (no terminan nunca), tope de tamaño y, si no se pidió un
+// recorte, tope de duración. Un video que no cumple se salta y yt-dlp termina sin bajar nada (se avisa al cliente).
+function guardArgs(config) {
+  const filters = ['!is_live'];
+  if (!config.startTime && !config.endTime) filters.push(`duration<=?${LIMITS.maxDurationMin * 60}`);
+  return ['--match-filter', filters.join(' & '), '--max-filesize', LIMITS.maxFileSize];
+}
+
 function buildVideoArgs(config) {
   const maxHeight = VIDEO_QUALITY_MAP[config.videoQuality];
   const format = `bestvideo[height<=${maxHeight}][ext=mp4]+${audioSelector(config, '[ext=m4a]')}/best[height<=${maxHeight}][ext=mp4]/best[height<=${maxHeight}]`;
@@ -122,6 +154,7 @@ function buildVideoArgs(config) {
     '-f', format,
     '--merge-output-format', 'mp4',
     '-o', '%(title)s.%(ext)s',
+    ...guardArgs(config),
     ...buildSectionArgs(config.startTime, config.endTime),
   ];
 }
@@ -139,6 +172,7 @@ function buildAudioArgs(config) {
     '--audio-format', 'mp3',
     '--audio-quality', bitrate,
     '-o', '%(title)s.%(ext)s',
+    ...guardArgs(config),
     ...buildSectionArgs(config.startTime, config.endTime),
   ];
 }
@@ -161,16 +195,64 @@ function snapshotDir(dir) {
   return new Set(fs.readdirSync(dir));
 }
 
+// Procesos de yt-dlp en marcha (cada uno en su propio grupo, para poder matarlo junto con ffmpeg).
+const activeChildren = new Set();
+
+function killTree(child) {
+  try {
+    process.kill(-child.pid, 'SIGKILL');
+  } catch {
+    child.kill('SIGKILL');
+  }
+}
+
+// Síntomas de que el problema es de YouTube o de yt-dlp (no del enlace del cliente): bloqueo, yt-dlp desactualizado...
+const SERVICE_FAILURE = /sign in|precondition|unable to extract|http error 4(03|29)|requested format is not available/i;
+
+// Error con un mensaje apto para el cliente (`publicMessage`) y el texto técnico original (`raw`) solo para el registro.
+// `service` marca los fallos del servicio (ver SERVICE_FAILURE), que se vigilan en health.js.
+const jobError = (publicMessage, raw = publicMessage, service = false) => Object.assign(new Error(publicMessage), { publicMessage, raw, service });
+
+// Traduce lo que dijo yt-dlp a un mensaje para el cliente: sin rutas del servidor ni texto técnico.
+function customerMessage(output) {
+  if (/does not pass filter/i.test(output)) {
+    return `Este video es una transmisión en vivo o dura más de ${LIMITS.maxDurationMin} min. Usa el recorte por tiempo para bajar solo un fragmento.`;
+  }
+  if (/larger than max-filesize/i.test(output)) {
+    return `El archivo pesa más de ${LIMITS.maxFileSize.replace(/G$/, ' GB')}. Prueba con una calidad menor o recorta un fragmento.`;
+  }
+  if (SERVICE_FAILURE.test(output)) {
+    return 'YouTube bloqueó la descarga por un momento. Inténtalo de nuevo en unos minutos; si sigue igual, avísanos.';
+  }
+  if (/private video|members[- ]only|join this channel/i.test(output)) return 'Este video es privado o es solo para miembros.';
+  if (/video unavailable|has been removed|no longer available|not available in your country|does not exist/i.test(output)) return 'Este video no está disponible.';
+  return 'No se pudo descargar este video. Revisa el enlace e inténtalo de nuevo.';
+}
+
 function runYtDlp(args, job, stageLabel) {
   return new Promise((resolve, reject) => {
     job.stage = stageLabel;
     job.percent = 0;
 
     const before = snapshotDir(job.dir);
-    const child = spawn('yt-dlp', args);
-    let stderrOutput = '';
+    const child = spawn('yt-dlp', args, { detached: true });
+    activeChildren.add(child);
+    let output = ''; // cola de lo que dijo yt-dlp (para explicar por qué falló)
+    const keep = (chunk) => {
+      output = (output + chunk).slice(-4000);
+    };
+    let timedOut = false;
+    const timer = setTimeout(() => {
+      timedOut = true;
+      killTree(child);
+    }, LIMITS.jobTimeoutMs);
+    const finish = () => {
+      clearTimeout(timer);
+      activeChildren.delete(child);
+    };
 
     child.stdout.on('data', (chunk) => {
+      keep(chunk);
       const text = chunk.toString();
       for (const line of text.split(/\r?\n/)) {
         if (!line) continue;
@@ -182,30 +264,26 @@ function runYtDlp(args, job, stageLabel) {
       }
     });
 
-    child.stderr.on('data', (chunk) => {
-      stderrOutput += chunk.toString();
-    });
+    child.stderr.on('data', keep);
 
     child.on('error', (err) => {
-      reject(new Error(`No se pudo ejecutar yt-dlp: ${err.message}`));
+      finish();
+      reject(jobError('El servicio de descargas no está disponible ahora mismo. Avísanos para arreglarlo.', `No se pudo ejecutar yt-dlp: ${err.message}`, true));
     });
 
     child.on('close', (code) => {
-      if (code === 0) {
-        job.percent = 100;
-        // Los archivos que quedan en disco al terminar la etapa son el
-        // resultado final; yt-dlp ya limpió los fragmentos intermedios
-        // (streams separados de audio/video antes de fusionarlos, etc.).
-        const after = snapshotDir(job.dir);
-        for (const name of after) {
-          if (!before.has(name) && !job.files.includes(name)) {
-            job.files.push(name);
-          }
-        }
-        resolve();
-      } else {
-        reject(new Error(stderrOutput.trim() || `yt-dlp finalizó con código ${code}`));
-      }
+      finish();
+      if (timedOut) return reject(jobError('La descarga tardó demasiado y se canceló. Prueba con otra calidad o recorta un fragmento.', 'timeout'));
+      if (code !== 0) return reject(jobError(customerMessage(output), output.trim() || `yt-dlp finalizó con código ${code}`, SERVICE_FAILURE.test(output)));
+      // Los archivos que quedan en disco al terminar la etapa son el
+      // resultado final; yt-dlp ya limpió los fragmentos intermedios
+      // (streams separados de audio/video antes de fusionarlos, etc.).
+      const created = [...snapshotDir(job.dir)].filter((name) => !before.has(name) && !job.files.includes(name));
+      // yt-dlp termina bien (código 0) aunque se salte el video por el filtro o el tope de tamaño: sin archivo nuevo no hubo descarga.
+      if (created.length === 0) return reject(jobError(customerMessage(output), output.trim() || 'yt-dlp no generó ningún archivo'));
+      job.files.push(...created);
+      job.percent = 100;
+      resolve();
     });
   });
 }
@@ -229,11 +307,15 @@ async function processJob(jobId, config) {
     job.stage = null;
     job.message = 'Descarga completada';
     job.finishedAt = Date.now();
+    audit.log('download_done', { userId: job.userId, jobId, files: job.files.length });
+    health.recordSuccess();
   } catch (err) {
     job.status = 'error';
     job.stage = null;
     job.message = 'No se pudo descargar el video.';
-    job.error = err.message;
+    job.error = err.publicMessage || 'No se pudo descargar este video. Revisa el enlace e inténtalo de nuevo.';
+    audit.log('download_error', { userId: job.userId, jobId, error: String(err.raw || err.message).slice(-300) });
+    if (err.service) health.recordServiceFailure(String(err.raw || err.message).slice(-200));
     removeJobFiles(job); // no dejar fragmentos a medias
   }
 }
@@ -253,9 +335,13 @@ setInterval(() => {
   }
 }, Math.min(60 * 1000, FILE_TTL_MS)).unref();
 
+// El registro de actividad se limpia una vez al día (y al arrancar).
+setInterval(() => audit.purgeOld(), 24 * 60 * 60 * 1000).unref();
+
 // Al apagar el backend no queda nada en disco.
 for (const signal of ['SIGINT', 'SIGTERM']) {
   process.on(signal, () => {
+    for (const child of activeChildren) killTree(child);
     fs.rmSync(JOBS_ROOT, { recursive: true, force: true });
     process.exit(0);
   });
@@ -271,42 +357,51 @@ app.post('/api/auth/login', async (req, res) => {
     return res.status(400).json({ error: 'Escribe tu usuario y tu contraseña.' });
   }
 
-  const wait = auth.retryAfterSeconds(req.ip, username);
-  if (wait > 0) {
-    res.setHeader('Retry-After', String(wait));
+  // El intento se anota antes de verificar la contraseña (ver beginAttempt): así una ráfaga simultánea no se cuela.
+  const attempt = auth.beginAttempt(req.ip, username);
+  if (attempt.wait > 0) {
+    res.setHeader('Retry-After', String(attempt.wait));
     return res.status(429).json({
-      error: `Demasiados intentos. Vuelve a intentarlo en ${Math.ceil(wait / 60)} min.`,
-      retryAfter: wait,
+      error: `Demasiados intentos. Vuelve a intentarlo en ${Math.ceil(attempt.wait / 60)} min.`,
+      retryAfter: attempt.wait,
     });
   }
 
   const user = await auth.authenticate(username, password);
   if (!user) {
-    auth.registerFailure(req.ip, username);
     return res.status(401).json({ error: 'El usuario o la contraseña no son correctos.' });
   }
 
-  // Las credenciales son correctas, pero el acceso ya venció: no se abre sesión.
+  // Credenciales correctas: no cuenta como intento fallido.
+  attempt.forgive();
+  auth.clearFailures(req.ip, username);
+
+  // Las credenciales son correctas, pero la cuenta está bloqueada o el acceso venció: no se abre sesión.
+  if (user.status === 'banned') {
+    return res.status(403).json({ error: auth.bannedMessage(), code: 'banned' });
+  }
   if (auth.isExpired(user)) {
     return res.status(403).json({ error: auth.expiredMessage(user), code: 'access_expired' });
   }
 
-  auth.clearFailures(req.ip, username);
-  auth.setSessionCookie(req, res, user.id);
+  auth.setSessionCookie(req, res, user);
+  audit.log('login', { userId: user.id, username: user.username, ip: req.ip });
   res.json({ user: auth.publicUser(user) });
 });
 
 app.post('/api/auth/logout', (req, res) => {
+  auth.closeCurrentSession(req);
   auth.clearSessionCookie(res);
   res.json({ ok: true });
 });
 
 app.get('/api/auth/me', (req, res) => {
-  const user = auth.currentUser(req);
-  if (!user) return res.status(401).json({ error: 'No hay sesión activa.' });
-  if (auth.isExpired(user)) return res.status(401).json({ error: auth.expiredMessage(user), code: 'access_expired' });
-  res.json({ user: auth.publicUser(user) });
+  const result = auth.resolveSession(req);
+  if (!result.user) return res.status(result.status).json(result.body);
+  res.json({ user: auth.publicUser(result.user) });
 });
+
+app.use('/api/admin', adminRouter);
 
 // Todo lo que sigue requiere haber iniciado sesión.
 // Entrega el archivo como descarga del navegador (Content-Disposition: attachment).
@@ -330,6 +425,24 @@ app.post('/api/download', auth.requireAuth, (req, res) => {
     return res.status(400).json({ error: errors.join(' ') });
   }
 
+  // Capacidad del servidor. Esto no es abuso del cliente, así que no cuenta como descarga ni como choque con un límite.
+  const running = [...jobs.values()].filter((job) => job.status === 'running');
+  if (req.user.role !== 'admin' && running.filter((job) => job.userId === req.user.id).length >= LIMITS.maxJobsPerUser) {
+    res.setHeader('Retry-After', '30');
+    return res.status(429).json({ error: `Ya tienes ${LIMITS.maxJobsPerUser} descargas en curso. Espera a que terminen para pedir otra.`, code: 'busy' });
+  }
+  if (running.length >= LIMITS.maxConcurrentJobs) {
+    res.setHeader('Retry-After', '30');
+    return res.status(503).json({ error: 'Hay muchas descargas en curso. Inténtalo de nuevo en un minuto.', code: 'server_busy' });
+  }
+
+  // Protecciones anti-abuso: calidad del plan, 5 por minuto, tope diario y bloqueo automático.
+  const denied = limits.checkDownload(req.user, { height: req.body.downloadVideo ? VIDEO_QUALITY_MAP[req.body.videoQuality] : 0, ip: req.ip });
+  if (denied) {
+    if (denied.retryAfter) res.setHeader('Retry-After', String(denied.retryAfter));
+    return res.status(denied.status).json(denied.body);
+  }
+
   const jobId = crypto.randomUUID();
   const dir = path.join(JOBS_ROOT, jobId);
   fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
@@ -343,6 +456,19 @@ app.post('/api/download', auth.requireAuth, (req, res) => {
     userId: req.user.id,
     dir,
     finishedAt: null,
+  });
+
+  audit.log('download_start', {
+    userId: req.user.id,
+    username: req.user.username,
+    plan: req.user.plan,
+    jobId,
+    ip: req.ip,
+    url: req.body.url.trim().slice(0, 300),
+    video: Boolean(req.body.downloadVideo),
+    audio: Boolean(req.body.downloadAudio),
+    thumbnail: Boolean(req.body.downloadThumbnail),
+    quality: req.body.downloadVideo ? req.body.videoQuality : null,
   });
 
   processJob(jobId, { ...req.body, url: req.body.url.trim(), dir });
@@ -368,7 +494,17 @@ app.get('/api/status/:jobId', auth.requireAuth, (req, res) => {
   });
 });
 
-app.listen(PORT, () => {
-  console.log(`Backend de yt-dlp escuchando en http://localhost:${PORT}`);
+// Errores: siempre JSON y sin detalles internos (rutas, pila de llamadas).
+app.use((req, res) => res.status(404).json({ error: 'No encontrado.' }));
+app.use((err, req, res, next) => {
+  if (res.headersSent) return next(err);
+  const status = err.status >= 400 && err.status < 500 ? err.status : 500;
+  if (status === 500) console.error(err);
+  res.status(status).json({ error: status === 500 ? 'Error interno del servidor.' : 'Solicitud no válida.' });
+});
+
+app.listen(PORT, HOST, () => {
+  console.log(`Backend de yt-dlp escuchando en http://${HOST}:${PORT}`);
   console.log(`Archivos temporales (se borran solos): ${JOBS_ROOT}`);
+  telegram.start();
 });

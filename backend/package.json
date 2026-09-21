@@ -5,9 +5,11 @@
   "description": "Backend local que ejecuta yt-dlp para el Descargador de YouTube",
   "main": "server.js",
   "scripts": {
-    "start": "node server.js"
+    "start": "node server.js",
+    "test": "node --test test/*.test.js"
   },
   "dependencies": {
-    "express": "^4.19.2"
+    "express": "^4.19.2",
+    "pdfkit": "^0.20.2"
   }
 }
