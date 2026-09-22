@@ -90,7 +90,7 @@ function buildReceipt(payment, status = payment.status === 'paid' ? 'paid' : 'pe
     .fillColor(MUTED)
     .font('Helvetica')
     .fontSize(9)
-    .text(`Este recibo no es un comprobante fiscal. Compra final: no hay reembolsos. Términos: ${PUBLIC_URL}/legal. Dudas: ${SELLER.contact}`, left, doc.page.height - 80, { width: contentWidth, align: 'center' });
+    .text(`Este recibo no es un comprobante fiscal. Compra final; reembolso solo si la falla es nuestra. Términos: ${PUBLIC_URL}/legal. Dudas: ${SELLER.contact}`, left, doc.page.height - 80, { width: contentWidth, align: 'center' });
 
   doc.end();
   return finished;

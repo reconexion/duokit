@@ -3,6 +3,7 @@
 const fs = require('fs');
 const path = require('path');
 const config = require('./config');
+const audit = require('./audit');
 const auth = require('./auth');
 const billing = require('./billing');
 const payments = require('./payments');
@@ -72,7 +73,7 @@ const PLANS_TEXT = `Planes de duokit
 • Video hasta ${PLANS.lifetime.qualityLabel}
 • Hasta ${PLANS.lifetime.dailyLimit} descargas al día
 
-Compras finales: no hay reembolsos. Al comprar aceptas los términos: ${config.PUBLIC_URL}/legal
+Compras finales; reembolso solo si la falla es nuestra. Antes de generar tu referencia te pediremos confirmar que aceptas los términos: ${config.PUBLIC_URL}/legal
 
 Elige tu plan:`;
 
@@ -199,7 +200,8 @@ async function deliverActivation({ payment, user, password, created, accessUntil
 // Comandos
 // ---------------------------------------------------------------------------
 
-async function startBuy(chatId, from, planId, givenName) {
+// Primer paso al elegir un plan: hay que aceptar los términos antes de pedir el nombre o generar la referencia.
+async function startBuy(chatId, from, planId) {
   const plan = PLANS[planId];
   const existing = auth.findUserByTelegramId(from.id);
   if (existing?.plan === 'lifetime') {
@@ -211,6 +213,28 @@ async function startBuy(chatId, from, planId, givenName) {
   if (!config.SELLER.account) {
     return sendMessage(chatId, `Las compras no están disponibles por ahora. Escribe a ${config.SELLER.contact}.`);
   }
+
+  return sendMessage(
+    chatId,
+    [
+      `Antes de comprar el plan ${plan.name} (${money(plan.price)}${plan.days ? ' al mes' : ', pago único'}), confirma que leíste y aceptas los términos de uso y la política de reembolsos (compras finales; reembolso solo si la falla es nuestra):`,
+      '',
+      `${config.PUBLIC_URL}/legal`,
+    ].join('\n'),
+    {
+      reply_markup: {
+        inline_keyboard: [[
+          { text: 'Acepto los términos ✅', callback_data: `accept:${planId}` },
+          { text: 'Cancelar', callback_data: 'declineterms' },
+        ]],
+      },
+    },
+  );
+}
+
+// Segundo paso: ya aceptó los términos. Pide el nombre si hace falta y genera (o reutiliza) la referencia.
+async function proceedAfterAccept(chatId, from, planId, givenName) {
+  const plan = PLANS[planId];
 
   // El nombre real permite reconocer la transferencia en el estado de cuenta: se pide la primera vez.
   const payerName = givenName || payments.knownName(from.id);
@@ -225,6 +249,7 @@ async function startBuy(chatId, from, planId, givenName) {
     telegramUsername: from.username,
     telegramName: fullName(from),
     payerName,
+    termsAcceptedAt: new Date().toISOString(),
   });
 
   await sendMessage(
@@ -237,7 +262,7 @@ async function startBuy(chatId, from, planId, givenName) {
       'Escribe la referencia completa, con tu nombre, en el concepto de la transferencia, tal cual.',
       '',
       'Te mando tu recibo en PDF. Cuando hagas la transferencia toca "Ya pagué" y lo revisamos.',
-      `Recuerda: las compras son finales (no hay reembolsos). Términos: ${config.PUBLIC_URL}/legal`,
+      `Recuerda: compras finales, reembolso solo si la falla es nuestra. Términos: ${config.PUBLIC_URL}/legal`,
     ].join('\n'),
     {
       reply_markup: {
@@ -387,7 +412,7 @@ async function handleMessage(message) {
       if (!NAME_PATTERN.test(name)) return sendMessage(chatId, `No pude leer ese nombre. Escribe solo tu nombre y apellido, sin números ni símbolos.\n\nEjemplo: Juan Pérez`);
       const planId = awaitingName.get(chatId);
       awaitingName.delete(chatId);
-      return startBuy(chatId, from, planId, name);
+      return proceedAfterAccept(chatId, from, planId, name);
     }
   }
 
@@ -414,6 +439,11 @@ async function handleCallback(query) {
   await call('answerCallbackQuery', { callback_query_id: query.id }).catch(() => {});
   const [action, value] = String(query.data || '').split(':');
   if (action === 'buy' && PLANS[value]) return startBuy(chatId, from, value);
+  if (action === 'accept' && PLANS[value]) {
+    audit.log('terms_accepted', { telegramId: String(from.id), telegramUsername: from.username || null, plan: value });
+    return proceedAfterAccept(chatId, from, value);
+  }
+  if (action === 'declineterms') return sendMessage(chatId, 'No hay problema. Cuando quieras comprar, usa /comprar.');
   if (action === 'paid') return reportPaid(chatId, from, value);
   if (action === 'cancel') return cancelPayment(chatId, from, value);
   return null;

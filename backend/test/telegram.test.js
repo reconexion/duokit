@@ -36,10 +36,15 @@ test('venta completa y solo el administrador (fijado por ID) puede confirmar, co
 
   tg.say(customer, '/comprar');
   tg.tap(customer, 'buy:basic');
+  const terms = said(await tg.replies(800), 500);
+  assert.match(terms, /aceptas los términos/i, 'antes de pedir el nombre o crear la referencia debe pedir aceptar los términos');
+  assert.match(terms, /\/legal/);
+
+  tg.tap(customer, 'accept:basic');
   tg.say(customer, 'María López Ruiz');
   const purchase = await tg.replies(1200);
   assert.match(said(purchase, 500), new RegExp(REF));
-  assert.match(said(purchase, 500), /no hay reembolsos/i, 'el cliente debe ver que no hay reembolsos antes de pagar');
+  assert.match(said(purchase, 500), /reembolso solo si la falla es nuestra/i, 'el cliente debe ver la política de reembolsos antes de pagar');
   assert.match(said(purchase, 500), new RegExp(`con referencia: ${REF} MARIA LOPEZ RUIZ`), 'la referencia lleva el nombre del cliente');
   assert.match(said(purchase, 1), new RegExp(`En el banco debe aparecer: ${REF} MARIA LOPEZ RUIZ`), 'el admin sabe qué concepto buscar');
   assert.match(said(purchase, 1), /Pago pendiente/);
@@ -83,12 +88,40 @@ test('otro cliente no puede tocar el pago de alguien más', async () => {
   const other = tg.from(700, 'otro');
   tg.say(customer, '/comprar');
   tg.tap(customer, 'buy:lifetime');
+  await tg.replies();
+  tg.tap(customer, 'accept:lifetime');
   const created = said(await tg.replies(1200), 500);
   const ref = /DUO-\d{4}-\d{3}/.exec(created)[0];
   tg.tap(other, `paid:${ref}`);
   tg.tap(other, `cancel:${ref}`);
   assert.match(said(await tg.replies(), 700), /No encontré/);
   assert.equal(srv.run(`console.log(require('./payments').get('${ref}').status)`), 'pending');
+});
+
+test('cancelar en la pantalla de términos no crea ninguna referencia', async () => {
+  const declinante = tg.from(800, 'declinante');
+  tg.say(declinante, '/comprar');
+  tg.tap(declinante, 'buy:basic');
+  await tg.replies();
+  tg.tap(declinante, 'declineterms');
+  assert.match(said(await tg.replies(), 800), /No hay problema/);
+  assert.equal(srv.run(`console.log(require('./payments').list().some((p) => p.telegramId === '800'))`), 'false');
+});
+
+test('aceptar de nuevo un plan con pago pendiente actualiza la fecha de aceptación sin duplicar la referencia', () => {
+  const out = srv.run(`
+    const payments = require('./payments');
+    const a = payments.create({ plan: 'basic', telegramId: 999, telegramUsername: 'x', payerName: 'Prueba Aceptar', termsAcceptedAt: '2020-01-01T00:00:00.000Z' });
+    const b = payments.create({ plan: 'basic', telegramId: 999, telegramUsername: 'x', payerName: 'Prueba Aceptar', termsAcceptedAt: '2021-01-01T00:00:00.000Z' });
+    console.log(JSON.stringify({ reference: a.payment.reference, sameRef: a.payment.reference === b.payment.reference, first: a.payment.termsAcceptedAt, second: b.payment.termsAcceptedAt, reused: b.reused }));
+  `);
+  const r = JSON.parse(out);
+  assert.equal(r.sameRef, true, 'no debe crear una segunda referencia para el mismo plan pendiente');
+  assert.equal(r.first, '2020-01-01T00:00:00.000Z');
+  assert.equal(r.second, '2021-01-01T00:00:00.000Z', 'la fecha se refresca con la aceptación más reciente');
+  assert.equal(r.reused, true);
+  // Se cancela: era solo para esta prueba y no debe contarse como pendiente en la prueba de /resumen que sigue.
+  srv.run(`require('./billing').cancel(${JSON.stringify(r.reference)})`);
 });
 
 test('/resumen le muestra al administrador cuántos faltan y cuántos ya activó, y nadie más puede verlo', async () => {

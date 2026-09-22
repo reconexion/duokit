@@ -54,10 +54,12 @@ const get = (reference) => read().find((p) => p.reference === normalizeReference
 const list = () => read();
 
 // Si la persona ya tiene un pago pendiente del mismo plan, se reutiliza (así no se acumulan referencias).
-function create({ plan, telegramId, telegramUsername, telegramName, payerName }) {
+function create({ plan, telegramId, telegramUsername, telegramName, payerName, termsAcceptedAt }) {
   const all = read();
   const existing = all.find((p) => p.status === 'pending' && p.telegramId === String(telegramId) && p.plan === plan);
-  if (existing) return { payment: existing, reused: true };
+  // Si ya tenía una referencia pendiente del mismo plan, se reutiliza (no se duplica), pero se refresca la fecha de
+  // aceptación: acaba de volver a tocar "Acepto los términos" para esta misma compra.
+  if (existing) return { payment: termsAcceptedAt ? update(existing.reference, { termsAcceptedAt }) : existing, reused: true };
   const payment = {
     reference: nextReference(all),
     plan,
@@ -74,6 +76,7 @@ function create({ plan, telegramId, telegramUsername, telegramName, payerName })
     userId: null,
     username: null,
     accessUntil: null,
+    termsAcceptedAt: termsAcceptedAt || null, // cuándo tocó "Acepto los términos" antes de generar esta referencia
   };
   write([...all, payment]);
   return { payment, reused: false };
