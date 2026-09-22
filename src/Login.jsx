@@ -6,8 +6,6 @@ import { Input } from '@/components/base/input/input';
 import { FeaturedIcon } from '@/components/foundations/featured-icon/featured-icon';
 import { useAuth } from './auth';
 
-const TELEGRAM_URL = import.meta.env.VITE_TELEGRAM_URL || 'https://t.me/tostilocos';
-
 const FEATURES = [
   { icon: VideoRecorder, title: 'Video hasta 4K', detail: 'En MP4, con la calidad que elijas.' },
   { icon: MusicNote01, title: 'Solo el audio', detail: 'En MP3, de 64 a 320 kbps.' },
@@ -258,8 +256,8 @@ export default function Login() {
 
         <p className="text-sm text-tertiary">
           ¿No tienes cuenta?{' '}
-          <a href={TELEGRAM_URL} target="_blank" rel="noopener noreferrer" className="font-semibold text-brand-secondary hover:underline">
-            Compra tu acceso en Telegram
+          <a href="/#planes" className="font-semibold text-brand-secondary hover:underline">
+            Compra tu acceso aquí
           </a>
           .
         </p>

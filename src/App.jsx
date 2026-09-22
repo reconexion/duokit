@@ -1,11 +1,14 @@
+import { useState } from 'react';
 import { Mascot } from 'page-mascot';
-import { LogOut01 } from '@untitledui/icons';
+import { LogOut01, User01 } from '@untitledui/icons';
 import { Avatar } from '@/components/base/avatar/avatar';
 import { Badge } from '@/components/base/badges/badges';
 import { Button } from '@/components/base/buttons/button';
+import AccountPanel from './AccountPanel';
 import Admin from './Admin';
 import Landing from './Landing';
 import Legal from './Legal';
+import PaymentReturn from './PaymentReturn';
 import Pattern from './Pattern';
 import Downloader from './Downloader';
 import Login from './Login';
@@ -21,7 +24,7 @@ const initialsOf = (name = '') =>
     .map((part) => part[0].toUpperCase())
     .join('');
 
-function UserBar() {
+function UserBar({ showAccount, onToggleAccount }) {
   const { user, logout } = useAuth();
   // Sin fecha de vencimiento (plan Permanente o administrador) se muestra "Acceso permanente".
   const access = user.expiresAt
@@ -34,18 +37,26 @@ function UserBar() {
           {access.label}
         </Badge>
       </span>
-      <div className="flex items-center gap-2.5">
+      <button
+        type="button"
+        onClick={onToggleAccount}
+        aria-expanded={showAccount}
+        className="flex items-center gap-2.5 rounded-lg p-1 -m-1 transition hover:bg-secondary"
+      >
         <Avatar size="sm" initials={initialsOf(user.name)} alt={user.name} />
-        <div className="hidden min-w-0 flex-col leading-tight sm:flex">
+        <div className="hidden min-w-0 flex-col items-start leading-tight sm:flex">
           <span className="truncate text-sm font-semibold text-primary">{user.name}</span>
           <span className="truncate text-xs text-tertiary">{user.username}</span>
         </div>
-      </div>
+      </button>
       {user.role === 'admin' && (
         <Button size="sm" color="tertiary" href="/admin">
           Panel
         </Button>
       )}
+      <Button size="sm" color="secondary" iconLeading={User01} onPress={onToggleAccount}>
+        Mi cuenta
+      </Button>
       <Button size="sm" color="secondary" iconLeading={LogOut01} onPress={logout}>
         Cerrar sesión
       </Button>
@@ -55,10 +66,16 @@ function UserBar() {
 
 function Home() {
   const { user } = useAuth();
+  const [showAccount, setShowAccount] = useState(false);
   const firstName = user.name.split(/\s+/)[0];
   return (
     <div className="mx-auto flex w-full max-w-[40rem] flex-col items-center animate-in fade-in slide-in-from-bottom-3 duration-500">
-      <UserBar />
+      <UserBar showAccount={showAccount} onToggleAccount={() => setShowAccount((v) => !v)} />
+      {showAccount && (
+        <div className="mb-8 w-full">
+          <AccountPanel user={user} />
+        </div>
+      )}
       <header className="mb-8 flex flex-col items-center text-center">
         <h1 className="font-[family-name:var(--font-display)] text-5xl font-bold tracking-tight text-brand-900 sm:text-6xl">duokit</h1>
         <p className="mt-3 max-w-md text-md text-tertiary">
@@ -124,5 +141,6 @@ export default function App() {
   }
   if (route === 'app') return <AppPage />;
   if (route === 'legal') return <Legal />;
+  if (route === 'pago') return <PaymentReturn />;
   return <Landing />;
 }

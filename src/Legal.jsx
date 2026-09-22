@@ -1,7 +1,7 @@
 import { Button } from '@/components/base/buttons/button';
 
-const TELEGRAM_URL = import.meta.env.VITE_TELEGRAM_URL || 'https://t.me/tostilocos';
-const UPDATED = '21 de septiembre de 2026';
+const SUPPORT_URL = import.meta.env.VITE_SUPPORT_URL || 'https://t.me/tostilocos';
+const UPDATED = '22 de septiembre de 2026';
 
 // Los precios y límites no se repiten aquí: valen los que se muestran en "Planes" y en el bot al comprar.
 const SECTIONS = [
@@ -12,7 +12,7 @@ const SECTIONS = [
       {
         h: '1. El servicio',
         p: [
-          'duokit es una herramienta para descargar de YouTube video, audio (MP3) y miniaturas desde tu navegador. Se contrata por Telegram y se paga por transferencia SPEI. Al pagar o usar duokit aceptas estos términos.',
+          'duokit es una herramienta para descargar de YouTube video, audio (MP3) y miniaturas desde tu navegador. Se contrata en este sitio y se paga con tarjeta a través de Stripe. Al pagar o usar duokit aceptas estos términos.',
         ],
       },
       {
@@ -20,7 +20,7 @@ const SECTIONS = [
         p: [
           'Los precios, la calidad máxima y el número de descargas por día de cada plan son los que aparecen en la sección Planes y en el bot al momento de comprar.',
           'El plan Básico dura 30 días y no se renueva solo: nunca hacemos cobros automáticos. Para seguir, compras de nuevo y se suman 30 días a tu cuenta.',
-          'El plan Permanente es de pago único y no vence: tu acceso dura mientras duokit siga operando. No es un plazo garantizado; si algún día dejamos de ofrecer el servicio, lo anunciaremos por Telegram.',
+          'El plan Permanente es de pago único y no vence: tu acceso dura mientras duokit siga operando. No es un plazo garantizado; si algún día dejamos de ofrecer el servicio, lo anunciaremos en este sitio.',
         ],
       },
       {
@@ -59,7 +59,7 @@ const SECTIONS = [
         p: [
           'Las compras son finales: no hay reembolso por cambio de opinión, por no usar tu acceso, ni por una suspensión debida a que incumpliste los términos.',
           'Sí hay reembolso cuando el servicio no funciona por una falla nuestra (por ejemplo, el sistema estuvo caído y no pudiste usar el acceso que pagaste, o se cobró un plan que nunca se activó). Escríbenos a @tostilocos y lo resolvemos.',
-          'Revisa el plan y el monto antes de transferir.',
+          'Revisa el plan antes de pagar.',
         ],
       },
     ],
@@ -70,27 +70,27 @@ const SECTIONS = [
     blocks: [
       {
         h: 'Quién trata tus datos',
-        p: ['duokit es responsable de tus datos personales. Contacto: @tostilocos en Telegram.'],
+        p: ['duokit es responsable de tus datos personales. Contacto: @tostilocos.'],
       },
       {
         h: 'Qué datos guardamos',
         p: [
-          'Los que nos das en Telegram: tu ID, tu @usuario y tu nombre, además del nombre completo que escribes al comprar (para reconocer tu transferencia).',
-          'Los de tu cuenta: usuario, plan, fecha de vencimiento y tu contraseña, que se guarda cifrada (nunca en texto claro).',
-          'Los de tus pagos: referencia, plan, monto y fechas.',
+          'Tu correo y el nombre que das al pagar (Stripe los recoge al cobrar y nos los pasa).',
+          'Los de tu cuenta: usuario (lo generamos nosotros), nombre, plan, fecha de vencimiento y tu contraseña, que se guarda cifrada (nunca en texto claro).',
+          'Los de tus pagos: referencia, plan, monto y fechas. Los datos de tu tarjeta los pide y los procesa Stripe directamente: nosotros nunca los vemos ni los guardamos.',
           'Los de tu uso: fecha y dirección IP de tus inicios de sesión y de cada descarga, con el enlace del video y la calidad elegida. No guardamos los archivos que descargas.',
         ],
       },
       {
         h: 'Para qué los usamos',
         p: [
-          'Para crear y administrar tu cuenta, confirmar tus pagos, enviarte tu acceso y tus recibos por Telegram, aplicar los límites de uso, prevenir abusos y atender tus dudas. No los usamos para publicidad.',
+          'Para crear y administrar tu cuenta, activar tu acceso cuando pagas, mostrarte tu recibo, aplicar los límites de uso, prevenir abusos y atender tus dudas. No los usamos para publicidad.',
         ],
       },
       {
         h: 'Con quién los compartimos',
         p: [
-          'No vendemos ni compartimos tus datos con terceros. Solo pasan por Telegram, que es el canal por el que nos comunicamos contigo, y los entregaremos si una autoridad competente nos lo exige.',
+          'No vendemos tus datos. Los compartimos solo con quien hace falta para operar: Stripe, que procesa tu pago (ellos manejan tu tarjeta y tu correo, con sus propias reglas de privacidad). Los entregaremos si una autoridad competente nos lo exige.',
         ],
       },
       {
@@ -158,7 +158,7 @@ export default function Legal() {
 
         <p className="mt-14 border-t border-secondary pt-6 text-sm text-tertiary">
           ¿Dudas? Escríbenos a{' '}
-          <a href={TELEGRAM_URL} target="_blank" rel="noopener noreferrer" className="font-semibold text-brand-secondary hover:underline">
+          <a href={SUPPORT_URL} target="_blank" rel="noopener noreferrer" className="font-semibold text-brand-secondary hover:underline">
             @tostilocos
           </a>
           .

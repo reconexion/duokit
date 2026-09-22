@@ -1,13 +1,12 @@
+import { useState } from 'react';
 import { Mascot } from 'page-mascot';
-import { Check, ChevronDown, CreditCard01, Download01, Globe01, Key01, Link01, MessageChatCircle, MusicNote01, Scissors01, Send01, VideoRecorder } from '@untitledui/icons';
+import { AlertCircle, Check, ChevronDown, CreditCard01, CursorClick01, Download01, Globe01, Key01, Link01, MusicNote01, Scissors01, VideoRecorder } from '@untitledui/icons';
 import { Badge } from '@/components/base/badges/badges';
 import { Button } from '@/components/base/buttons/button';
 import { FeaturedIcon } from '@/components/foundations/featured-icon/featured-icon';
 import { cx } from '@/utils/cx';
 
-const TELEGRAM_URL = import.meta.env.VITE_TELEGRAM_URL || 'https://t.me/tostilocos';
-
-const telegramLink = { href: TELEGRAM_URL, target: '_blank', rel: 'noopener noreferrer' };
+const SUPPORT_URL = import.meta.env.VITE_SUPPORT_URL || 'https://t.me/tostilocos';
 
 const FEATURES = [
   { icon: VideoRecorder, title: 'Video hasta 4K', text: 'Elige la calidad, desde 480p. El 4K llega con el plan Permanente.' },
@@ -17,9 +16,9 @@ const FEATURES = [
 ];
 
 const STEPS = [
-  { icon: MessageChatCircle, title: 'Escríbenos en Telegram', text: 'Manda /comprar y elige tu plan.' },
-  { icon: CreditCard01, title: 'Transfiere por SPEI', text: 'Te damos los datos de la cuenta, una referencia única y tu recibo en PDF.' },
-  { icon: Key01, title: 'Recibe tu acceso', text: 'Al confirmar tu pago te llegan tu usuario y contraseña. Entra y descarga.' },
+  { icon: CursorClick01, title: 'Elige tu plan', text: 'Básico o Permanente, aquí mismo.' },
+  { icon: CreditCard01, title: 'Paga con tarjeta', text: 'Un checkout seguro de Stripe. duokit nunca ve tu tarjeta.' },
+  { icon: Key01, title: 'Entra y descarga', text: 'En cuanto Stripe confirma el cobro, tu cuenta ya está lista, ahí mismo en la pantalla.' },
 ];
 
 const PLANS = [
@@ -43,11 +42,12 @@ const PLANS = [
 ];
 
 const FAQ = [
-  { q: '¿Cómo pago?', a: 'Por transferencia SPEI. En Telegram te damos los datos de la cuenta y una referencia única; tú solo escribes esa referencia en el concepto.' },
-  { q: '¿Cuánto tarda en activarse mi cuenta?', a: 'En cuanto confirmamos tu transferencia. Te llega el usuario y la contraseña por Telegram, junto con tu recibo.' },
+  { q: '¿Cómo pago?', a: 'Con tarjeta, por un checkout seguro de Stripe. Elige tu plan, paga, y tu cuenta queda lista en la misma pantalla.' },
+  { q: '¿Cuánto tarda en activarse mi cuenta?', a: 'Segundos: en cuanto Stripe confirma el cobro, ves tu usuario y contraseña ahí mismo, sin que nadie confirme nada a mano.' },
   { q: '¿Puedo entrar desde varios dispositivos?', a: 'Sí, hasta 2 sesiones abiertas a la vez con la misma cuenta. Si abres una tercera, se cierra la más antigua.' },
-  { q: '¿Hay reembolsos?', a: 'Las compras son finales: no hay reembolso por cambio de opinión ni por no usar tu acceso. Sí hay reembolso si el servicio falla por nuestra culpa (por ejemplo, se cae el sistema). Escríbenos por Telegram y lo resolvemos.' },
-  { q: '¿Qué pasa cuando vence el plan Básico?', a: 'Tu acceso termina en la fecha indicada. Para seguir, vuelves a mandar /comprar: la renovación suma 30 días a tu cuenta.' },
+  { q: '¿Hay reembolsos?', a: 'Las compras son finales: no hay reembolso por cambio de opinión ni por no usar tu acceso. Sí hay reembolso si el servicio falla por nuestra culpa (por ejemplo, se cae el sistema). Escríbenos y lo resolvemos.' },
+  { q: '¿Qué pasa cuando vence el plan Básico?', a: 'Tu acceso termina en la fecha indicada. Para seguir, compra de nuevo con el mismo correo: la renovación suma 30 días a tu cuenta.' },
+  { q: '¿Y si olvido mi contraseña?', a: 'Si sigues con la sesión abierta en algún dispositivo, genera una nueva desde tu cuenta. Si no, escríbenos y te ayudamos.' },
 ];
 
 // Vista previa de la app (solo decorativa).
@@ -96,7 +96,7 @@ function SectionHeading({ title, text }) {
   );
 }
 
-function PlanCard({ plan }) {
+function PlanCard({ plan, canBuy, isLoading, onBuy }) {
   return (
     <div
       className={cx(
@@ -129,14 +129,45 @@ function PlanCard({ plan }) {
           </li>
         ))}
       </ul>
-      <Button size="xl" color={plan.highlight ? 'primary' : 'secondary'} iconLeading={Send01} className="mt-auto w-full" {...telegramLink}>
-        Comprar en Telegram
+      <Button
+        size="xl"
+        color={plan.highlight ? 'primary' : 'secondary'}
+        iconLeading={CreditCard01}
+        className="mt-auto w-full"
+        isDisabled={!canBuy || isLoading}
+        isLoading={isLoading}
+        onPress={onBuy}
+      >
+        Comprar {plan.name}
       </Button>
     </div>
   );
 }
 
 export default function Landing() {
+  const [acceptedTerms, setAcceptedTerms] = useState(false);
+  const [loadingPlan, setLoadingPlan] = useState(null);
+  const [error, setError] = useState(null);
+
+  const buy = async (planId) => {
+    setError(null);
+    setLoadingPlan(planId);
+    try {
+      const res = await fetch('/api/checkout', {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ plan: planId, acceptedTerms: true }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || 'No se pudo iniciar el pago.');
+      window.location.href = data.url; // a partir de aquí, Stripe: pide correo, nombre y tarjeta
+    } catch (err) {
+      setError(err.message);
+      setLoadingPlan(null);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-primary text-primary">
       {/* Barra superior */}
@@ -154,8 +185,8 @@ export default function Landing() {
             <Button size="sm" color="secondary" href="/app">
               Entrar
             </Button>
-            <Button size="sm" color="primary" iconLeading={Send01} className="hidden sm:inline-flex" {...telegramLink}>
-              Únete en Telegram
+            <Button size="sm" color="primary" iconLeading={CreditCard01} className="hidden sm:inline-flex" href="#planes">
+              Comprar
             </Button>
           </div>
         </div>
@@ -181,14 +212,14 @@ export default function Landing() {
                 Pega el enlace, elige video, audio o miniatura y tu navegador lo guarda. Sin instalar nada, sin anuncios y con recorte de fragmentos incluido.
               </p>
               <div className="flex flex-col gap-3 sm:flex-row">
-                <Button size="xl" color="primary" iconLeading={Send01} {...telegramLink}>
-                  Únete en Telegram
+                <Button size="xl" color="primary" iconLeading={CreditCard01} href="#planes">
+                  Comprar
                 </Button>
                 <Button size="xl" color="secondary" href="/app">
                   Ya tengo cuenta
                 </Button>
               </div>
-              <p className="text-sm text-tertiary">Pagas por transferencia (SPEI) y recibes tu acceso por Telegram.</p>
+              <p className="text-sm text-tertiary">Pagas con tarjeta (Stripe) y tu cuenta queda lista al momento, automático.</p>
             </div>
 
             <div className="relative flex justify-center lg:justify-end">
@@ -224,7 +255,7 @@ export default function Landing() {
         {/* Cómo funciona */}
         <section id="como-funciona" className="scroll-mt-16 bg-secondary py-16 lg:py-24">
           <div className="mx-auto max-w-6xl px-4 sm:px-6">
-            <SectionHeading title="Empieza en tres pasos" text="Sin formularios ni tarjetas: todo por Telegram." />
+            <SectionHeading title="Empieza en tres pasos" text="Sin bot, sin esperar a nadie: todo aquí mismo." />
             <ol className="grid gap-8 md:grid-cols-3">
               {STEPS.map(({ icon, title, text }, index) => (
                 <li key={title} className="flex flex-col items-center gap-4 text-center">
@@ -245,18 +276,39 @@ export default function Landing() {
         {/* Planes */}
         <section id="planes" className="mx-auto max-w-4xl scroll-mt-16 px-4 py-16 sm:px-6 lg:py-24">
           <SectionHeading title="Elige tu plan" text="Precios en pesos mexicanos. Sin letra chiquita." />
+
+          <label className="mx-auto mb-8 flex max-w-lg cursor-pointer items-start gap-3 rounded-xl bg-secondary p-4 text-sm text-secondary ring-1 ring-secondary ring-inset">
+            <input
+              type="checkbox"
+              checked={acceptedTerms}
+              onChange={(event) => setAcceptedTerms(event.target.checked)}
+              className="mt-0.5 size-4 shrink-0 accent-[var(--color-brand-solid)]"
+            />
+            <span>
+              He leído y acepto los{' '}
+              <a href="/legal#terminos" target="_blank" rel="noopener noreferrer" className="font-semibold text-brand-secondary hover:underline">
+                términos de uso
+              </a>{' '}
+              y la{' '}
+              <a href="/legal#reembolsos" target="_blank" rel="noopener noreferrer" className="font-semibold text-brand-secondary hover:underline">
+                política de reembolsos
+              </a>{' '}
+              (compras finales; reembolso solo si la falla es nuestra).
+            </span>
+          </label>
+
           <div className="grid gap-8 md:grid-cols-2">
             {PLANS.map((plan) => (
-              <PlanCard key={plan.id} plan={plan} />
+              <PlanCard key={plan.id} plan={plan} canBuy={acceptedTerms} isLoading={loadingPlan === plan.id} onBuy={() => buy(plan.id)} />
             ))}
           </div>
-          <p className="mt-8 text-center text-sm text-tertiary">
-            Compras finales; reembolso solo si la falla es nuestra. Al comprar aceptas los{' '}
-            <a href="/legal#terminos" className="font-semibold text-brand-secondary hover:underline">
-              términos
-            </a>
-            .
-          </p>
+
+          {error && (
+            <div role="alert" className="mx-auto mt-6 flex max-w-lg items-start gap-2 rounded-xl bg-error-primary p-4 text-sm text-error-primary ring-1 ring-error_subtle ring-inset">
+              <AlertCircle className="size-5 shrink-0" />
+              {error}
+            </div>
+          )}
         </section>
 
         {/* Preguntas */}
@@ -282,9 +334,9 @@ export default function Landing() {
             style={{ backgroundImage: 'radial-gradient(120% 90% at 0% 0%, rgb(255 255 255 / 0.18), transparent 60%), linear-gradient(160deg, var(--color-brand-700), var(--color-brand-900))' }}
           >
             <h2 className="max-w-xl font-[family-name:var(--font-display)] text-3xl font-bold tracking-tight sm:text-4xl">¿Listo para descargar sin vueltas?</h2>
-            <p className="max-w-md text-lg text-brand-100">Escríbenos en Telegram y en un rato ya estás dentro.</p>
-            <Button size="xl" color="secondary" iconLeading={Send01} {...telegramLink}>
-              Únete en Telegram
+            <p className="max-w-md text-lg text-brand-100">Elige tu plan, paga con tarjeta y en segundos ya estás dentro.</p>
+            <Button size="xl" color="secondary" iconLeading={CreditCard01} href="#planes">
+              Comprar
             </Button>
           </div>
         </section>
@@ -294,7 +346,7 @@ export default function Landing() {
         <div className="mx-auto flex max-w-6xl flex-col gap-3 px-4 py-8 text-sm text-tertiary sm:flex-row sm:items-center sm:justify-between sm:px-6">
           <p>
             © {new Date().getFullYear()} duokit · Contacto:{' '}
-            <a href={TELEGRAM_URL} target="_blank" rel="noopener noreferrer" className="font-semibold text-brand-secondary hover:underline">
+            <a href={SUPPORT_URL} target="_blank" rel="noopener noreferrer" className="font-semibold text-brand-secondary hover:underline">
               @tostilocos
             </a>
           </p>
