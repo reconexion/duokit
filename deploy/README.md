@@ -28,13 +28,13 @@ sudo -u duokit npm ci --omit=dev --prefix backend
 cp backend/.env.example backend/.env && nano backend/.env
 ```
 
-En `backend/.env` pon: `TELEGRAM_BOT_TOKEN`, `SELLER_ACCOUNT`, `PUBLIC_URL=https://tudominio.com` y **`TRUST_PROXY=1`**.
+En `backend/.env` pon: `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET` (del webhook que apunta a `/api/webhook/stripe`), `PUBLIC_URL=https://tudominio.com` y **`TRUST_PROXY=1`**.
 Crea el administrador (muestra su contraseña una sola vez): `sudo -u duokit npm run user:admin`.
 
-El frontend se compila con el enlace al bot (la variable se "hornea" al compilar):
+El frontend se compila con el enlace de contacto de soporte (la variable se "hornea" al compilar):
 
 ```bash
-echo "VITE_TELEGRAM_URL=https://t.me/duokit_bot" > .env
+echo "VITE_SUPPORT_URL=https://t.me/tostilocos" > .env
 npm ci && npm run build          # genera dist/
 ```
 
@@ -44,7 +44,7 @@ npm ci && npm run build          # genera dist/
 sudo cp deploy/duokit-backend.service deploy/duokit-backup.service deploy/duokit-backup.timer /etc/systemd/system/
 sudo systemctl daemon-reload
 sudo systemctl enable --now duokit-backend duokit-backup.timer
-systemctl status duokit-backend      # debe decir "Bot de Telegram activo" en: journalctl -u duokit-backend
+systemctl status duokit-backend      # revisa que arrancó bien en: journalctl -u duokit-backend
 ```
 
 ## 4. Nginx y HTTPS
@@ -66,15 +66,16 @@ Prueba restaurar una vez: `tar -xzf duokit-data-*.tar.gz -C /tmp` y revisa que `
 
 ## 6. Mantenimiento
 
-- **yt-dlp**: actualízalo seguido (`sudo -iu duokit pipx upgrade yt-dlp`, por ejemplo con un cron semanal). Si varias descargas
-  seguidas fallan por YouTube, el bot te avisa por Telegram.
+- **yt-dlp**: actualízalo seguido (`sudo -iu duokit pipx upgrade yt-dlp`, por ejemplo con un cron semanal). Si varias
+  descargas seguidas fallan por YouTube, `/admin` muestra un aviso.
 - **Registro de actividad**: se borra solo a los 90 días (`DUOKIT_AUDIT_RETENTION_DAYS` para cambiarlo).
 - **Actualizar el código**: `git pull && npm ci && npm run build && sudo systemctl restart duokit-backend`.
 
 ## 7. Lista de comprobación antes de vender
 
 - [ ] Descarga real desde el servidor (video, audio, miniatura).
-- [ ] Compra de prueba de punta a punta con el bot real: `/comprar` → transferir → `/confirmar REF MONTO` → entrar.
-- [ ] `https://tudominio.com/legal` carga y la landing manda al bot correcto.
+- [ ] Compra de prueba de punta a punta en el sitio real: elige un plan → paga en Stripe → en `/pago` aparecen tu
+      usuario y contraseña → entra y descarga algo.
+- [ ] `https://tudominio.com/legal` carga y el webhook de Stripe llega (revisa `journalctl -u duokit-backend`).
 - [ ] Reiniciar el servidor y comprobar que todo vuelve solo.
 - [ ] Restaurar un respaldo de prueba.

@@ -1,5 +1,5 @@
-# Imagen para un hospedaje por contenedor (Railway y similares). Un solo servicio: el backend de Node sirve la API,
-# el bot de Telegram y el frontend ya compilado (dist/) — no hay nginx delante, el propio Railway hace de proxy.
+# Imagen para un hospedaje por contenedor (Railway y similares). Un solo servicio: el backend de Node sirve la API
+# (con el webhook de Stripe) y el frontend ya compilado (dist/) — no hay nginx delante, el propio Railway hace de proxy.
 #
 # NO PROBADO con `docker build` de verdad (este entorno no tenía acceso al demonio de Docker). Sí está probado por
 # separado: el backend sirviendo un frontend compilado (test/static.test.js y una prueba manual con curl) y que
@@ -15,10 +15,10 @@ RUN npm ci
 COPY index.html vite.config.js ./
 COPY public ./public
 COPY src ./src
-# El enlace del bot se "hornea" en este paso (variable de build, no de ejecución). Pásala con --build-arg en Railway
-# (Settings → Build) o queda el valor por defecto de Landing.jsx/Login.jsx.
-ARG VITE_TELEGRAM_URL
-ENV VITE_TELEGRAM_URL=$VITE_TELEGRAM_URL
+# El enlace de contacto de soporte se "hornea" en este paso (variable de build, no de ejecución). Pásala con
+# --build-arg en Railway (Settings → Build) o queda el valor por defecto (@tostilocos) de Landing.jsx/Legal.jsx.
+ARG VITE_SUPPORT_URL
+ENV VITE_SUPPORT_URL=$VITE_SUPPORT_URL
 RUN npm run build
 
 FROM node:22-bookworm-slim

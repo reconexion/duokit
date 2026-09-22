@@ -22,10 +22,7 @@ lo puedo ejecutar yo por CLI: crear el proyecto, la variable, el volumen, el dep
 
 ## 1. Datos que debes tener a la mano (nunca los pegues en el chat; te los pediré uno por uno cuando toque)
 
-- El token del bot (`TELEGRAM_BOT_TOKEN`, de @BotFather).
-- Tu CLABE o tarjeta (`SELLER_ACCOUNT`).
-- Tu @usuario de Telegram (`ADMIN_TELEGRAM`, ya es `tostilocos`) y, si quieres fijarlo de una vez por tu ID numérico
-  en vez de por @usuario, pídeselo a @userinfobot (`ADMIN_TELEGRAM_ID`).
+- Tu clave secreta de Stripe (`STRIPE_SECRET_KEY`) y, después de crear el webhook, `STRIPE_WEBHOOK_SECRET` (ver README.md). Stripe pide tus datos fiscales (RFC) para activarse en México, aparte de esto.
 
 ## 2. Lo que voy a crear en Railway
 
@@ -50,10 +47,12 @@ railway ssh -- node -e "require('./diagnose').diagnose().then(r => console.log(J
 - Si todo falla: ahí sí toca decidir entre proxy residencial de pago por GB o el híbrido con tu PC en Tuxtla — como
   quedamos, nada de eso se contrata sin que tú lo confirmes primero.
 
-## 4. Encender el bot y el primer administrador
+## 4. Encender Stripe y el primer administrador
 
 ```bash
-railway variables set TELEGRAM_BOT_TOKEN=... SELLER_ACCOUNT=... ADMIN_TELEGRAM=tostilocos
+railway variables set STRIPE_SECRET_KEY=...
+# Después de crear el webhook en el Dashboard de Stripe (apuntando a https://tudominio.com/api/webhook/stripe):
+railway variables set STRIPE_WEBHOOK_SECRET=...
 railway ssh -- node scripts/users.js admin   # el contenedor ya arranca dentro de backend/, por el WORKDIR del Dockerfile
 ```
 
@@ -67,18 +66,17 @@ railway domain status tudominio.com   # te da el CNAME que debes crear en tu pro
 ```
 
 Crea ese registro en tu proveedor de dominio (fuera de Railway; eso no lo puedo hacer yo). Cuando resuelva, actualiza
-`PUBLIC_URL` a `https://tudominio.com` y, si quieres que los botones de la landing usen ese dominio para el bot, no
-hace falta tocar nada más: siguen apuntando a `t.me/duokit_bot`, no al dominio de la app.
+`PUBLIC_URL` a `https://tudominio.com` y reconstruye el frontend (es a donde Stripe regresa al cliente después de pagar).
 
 ## 6. Antes de vender de verdad
 
 - [ ] `/api/admin/ytdlp-diagnose` en verde (o ya resuelto con proxy/cookies).
-- [ ] Compra de prueba real con el bot ya desplegado: `/comprar` → aceptar términos → nombre → transferencia real →
-      `/confirmar REF MONTO` → entrar con esas credenciales y descargar algo.
+- [ ] Compra de prueba real ya desplegado: elige un plan en el sitio → aceptar términos → pagar de verdad en Stripe →
+      en `/pago` deben aparecer tu usuario y contraseña → entrar con esas credenciales y descargar algo.
 - [ ] `railway ssh -- df -h /data` (o el equivalente) para confirmar que el volumen quedó montado antes de crear el
       primer usuario real — si no, ese usuario se perdería en el siguiente deploy.
 - [ ] Un respaldo del volumen fuera de Railway (Railway no lo hace por ti). `deploy/backup.sh` sirve si migras a un
       VPS tradicional más adelante; en Railway, lo más simple es `railway volume files` o programar un
       `railway ssh -- tar czf - /data` con salida a algún lado tuyo — lo armamos cuando lleguemos a este punto.
-- [ ] Revisa los registros del primer deploy (`railway logs`) buscando que no aparezca el token del bot ni tu CLABE:
-      ninguno de los dos se imprime en el código (se usan directo desde `process.env`), pero es la comprobación final.
+- [ ] Revisa los registros del primer deploy (`railway logs`) buscando que no aparezca la clave de Stripe: no se
+      imprime en el código (se usa directo desde `process.env`), pero es la comprobación final.

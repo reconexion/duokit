@@ -1,7 +1,7 @@
 # /etc/systemd/system/duokit-backend.service
 # Ajusta User, rutas y la ubicación de node (`which node`) a tu servidor.
 [Unit]
-Description=duokit backend (API, yt-dlp y bot de Telegram)
+Description=duokit backend (API, yt-dlp y webhook de Stripe)
 After=network-online.target
 Wants=network-online.target
 

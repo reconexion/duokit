@@ -1,11 +1,13 @@
 # duokit
 
 Descargador de YouTube (video, audio y miniatura, con recorte por tiempo) que se vende por suscripción:
-los clientes compran por **Telegram**, pagan por **transferencia SPEI** y reciben su acceso automáticamente.
+el cliente elige su plan en el sitio, paga con **tarjeta por Stripe** y su cuenta queda lista al momento,
+en la misma pantalla — sin bot, sin que nadie confirme nada a mano.
 
 - **Frontend:** React + Vite + Tailwind + Untitled UI.
 - **Backend:** Node.js/Express + `yt-dlp`. Sin base de datos: todo en archivos JSON dentro de `backend/data/`.
-- **Rutas:** `/` página pública (landing) · `/app` la aplicación · `/admin` panel del administrador.
+- **Rutas:** `/` página pública (landing, con los planes) · `/app` la aplicación · `/admin` panel del administrador
+  · `/pago` a donde Stripe regresa al cliente después de pagar.
 
 ## Puesta en marcha
 
@@ -13,40 +15,39 @@ Requisitos: `yt-dlp` y `ffmpeg` en el `PATH`, y Node 22.
 
 ```bash
 npm install && npm install --prefix backend
-cp backend/.env.example backend/.env     # y rellena el token (ver abajo)
+cp backend/.env.example backend/.env     # y rellena las claves de Stripe (ver abajo)
 npm run user:admin                       # crea el administrador (muestra su contraseña una sola vez)
 npm start                                # backend en :3001 + Vite en :5173
 ```
 
-### 1. Crear el bot de Telegram
-1. En Telegram habla con **@BotFather** → `/newbot` → elige nombre y usuario del bot.
-2. Copia el token que te da y pégalo en `backend/.env` como `TELEGRAM_BOT_TOKEN=...`.
-3. Reinicia (`npm start`). En la consola debe salir `Bot de Telegram activo: @tu_bot`.
-4. **Desde la cuenta @tostilocos**, escríbele `/start` al bot. Así el bot sabe a qué chat mandarte los avisos de pago.
-5. (Opcional) En `.env`, `PUBLIC_URL` es la dirección pública de la app: aparece en el mensaje con el acceso del cliente.
-6. Para que los botones de la landing lleven al bot (y no a tu perfil), crea un archivo `.env` en la raíz del proyecto con
-   `VITE_TELEGRAM_URL=https://t.me/el_usuario_de_tu_bot` y reinicia. Las compras y las contraseñas van siempre por el chat
-   privado con el bot, nunca en un grupo.
+### Configurar Stripe
 
-### 2. Flujo de una venta
-1. El cliente escribe `/comprar` y elige plan. La primera vez el bot le pide su **nombre completo** (como aparece en su banco);
-   así, en tu estado de cuenta reconoces quién pagó. Ese nombre es el que se muestra en su cuenta y en el recibo. Después el bot le da la referencia (`DUO-2026-001`, `-002`...) con el texto
-   *"Transfiere $129.00 MXN a esta tarjeta de débito: <tu cuenta> con referencia: DUO-2026-001 JUAN PEREZ"* y su **recibo en PDF**.
-   La referencia lleva **su nombre** (sin acentos ni símbolos y en máximo 40 caracteres, como aceptan los bancos en el concepto), así
-   en tu estado de cuenta ves de un vistazo quién pagó. El identificador interno sigue siendo `DUO-2026-001` (es el que usas en `/confirmar`).
-2. Te llega un aviso por Telegram ("Pago pendiente", con su nombre y su @usuario) y aparece en `/admin`. Si el cliente toca "Ya pagué", te avisa otra vez.
-3. Cuando ves la transferencia, la confirmas: botón **Confirmar** en `/admin` o `/confirmar DUO-2026-001 129` en el bot
-   (el monto es lo que te llegó al banco; si no coincide con el del plan, el bot no activa nada).
-4. Se crea el usuario (o se renueva el existente), y el cliente recibe usuario, contraseña y el recibo pagado por Telegram.
+1. Crea una cuenta en [dashboard.stripe.com](https://dashboard.stripe.com) y actívala (Stripe pide tus datos fiscales
+   para poder pagarte: ver "Datos y seguridad" abajo).
+2. Copia tu clave secreta (`sk_test_...` para probar primero, `sk_live_...` cuando ya cobres de verdad) a
+   `backend/.env` como `STRIPE_SECRET_KEY=...`.
+3. En el Dashboard, crea un webhook que apunte a `https://tudominio.com/api/webhook/stripe`, escuchando el evento
+   `checkout.session.completed`. Copia el "signing secret" (`whsec_...`) a `backend/.env` como `STRIPE_WEBHOOK_SECRET=...`.
+4. Reinicia. Sin `STRIPE_SECRET_KEY`, el sitio responde "Las compras no están disponibles por ahora" en vez de vender.
 
-Comandos del bot: `/comprar` `/estado` `/recuperar` (contraseña nueva) `/ayuda`. Del administrador (menú solo en tu chat): `/resumen` `/pendientes` `/confirmar REF MONTO`.
+`PUBLIC_URL` en `backend/.env` es a dónde Stripe regresa al cliente después de pagar (`/pago`); ponla en tu dominio real.
 
-### Comandos del administrador
+### Flujo de una venta
 
-- `/resumen` — el panorama de un vistazo: **por activar** (cuántos, cuánto dinero está por cobrar, quién dice que ya pagó y hace cuánto),
-  **activados** (hoy, este mes y total, por plan, y los últimos 5) y clientes (activos, los que vencen en 7 días o menos, bloqueados).
-- `/pendientes` — la lista completa de pagos pendientes, con el concepto que debes buscar en el banco.
-- `/confirmar REFERENCIA MONTO` — activa el pago cuando ves la transferencia.
+1. El cliente marca la casilla de términos, elige un plan y toca "Comprar". El sitio crea el checkout y lo manda
+   directo a Stripe.
+2. En Stripe paga con tarjeta y da su correo y nombre (Stripe los recoge al cobrar; duokit nunca ve el número de tarjeta).
+3. Stripe avisa al backend por el webhook; la cuenta se crea (o se renueva, si el correo ya tenía una) sola.
+4. Stripe regresa al cliente a `/pago`, que consulta si ya está lista y muestra su **usuario y contraseña** ahí mismo
+   (la contraseña sale difuminada, con un botón para revelarla — es la única vez que se muestra) y el recibo en PDF.
+
+No hay ningún aviso push para ti: nadie te escribe cuando entra una venta. Revisa `/admin` de vez en cuando (o el
+Dashboard de Stripe, que sí manda correo por cada cobro) — ahí ves los pagos confirmados, los que se quedaron a
+medias y si hay alguna alerta de servicio.
+
+Si el cliente pierde su contraseña: con la sesión abierta puede generar una nueva desde "Mi cuenta" en `/app`
+(cierra sus otras sesiones, no la que la pidió). Si ya cerró sesión en todos lados, tienes que restablecérsela tú
+desde `/admin` y dársela por donde te contacte.
 
 ## Planes y límites
 
@@ -61,14 +62,23 @@ Todo esto se cambia en `backend/plans.js`. Protecciones anti-abuso (también ah�
 - Máximo **5 descargas por minuto** por usuario (`429`).
 - Tope **diario** por plan (`429`, se reinicia a medianoche del servidor).
 - Máximo **2 sesiones a la vez** por cuenta: al abrir una tercera se cierra la más antigua.
-- **Bloqueo automático** al chocar con un límite 5 veces en 24 h (los choques con el tope por minuto cuentan una vez por minuto; con el tope diario, una vez por hora). Te avisa por Telegram y lo puedes desbloquear en `/admin` (al desbloquear se borran sus choques).
-- **Protección del servidor** (también en `backend/plans.js`): máximo 2 descargas a la vez por usuario y 4 en todo el servidor, cada descarga se cancela a los 20 min, no se bajan transmisiones en vivo, archivos de más de 2 GB ni videos de más de 3 h (con el recorte por tiempo sí se puede bajar un fragmento de un video largo).
-- **Auditoría:** `backend/data/audit.log` guarda una línea por descarga (usuario, IP, enlace, calidad), inicio de sesión, pago y bloqueo.
+- **Bloqueo automático** al chocar con un límite 5 veces en 24 h (los choques con el tope por minuto cuentan una vez
+  por minuto; con el tope diario, una vez por hora). Se ve en `/admin` (la cuenta aparece bloqueada) y se puede
+  desbloquear ahí (al desbloquear se borran sus choques).
+- **Protección del servidor** (también en `backend/plans.js`): máximo 2 descargas a la vez por usuario y 4 en todo el
+  servidor, cada descarga se cancela a los 20 min, no se bajan transmisiones en vivo, archivos de más de 2 GB ni
+  videos de más de 3 h (con el recorte por tiempo sí se puede bajar un fragmento de un video largo).
+- **Auditoría:** `backend/data/audit.log` guarda una línea por descarga (usuario, IP, enlace, calidad), inicio de
+  sesión, pago y bloqueo.
+- **Alerta de servicio:** si 3 descargas seguidas fallan por YouTube/yt-dlp, `/admin` muestra un aviso (suele
+  arreglarse con `pipx upgrade yt-dlp`).
 
 ## Panel de administración (`/admin`)
 
-Entras con el usuario `admin`. Muestra ingresos totales, usuarios activos, descargas (hoy y total), pagos pendientes con
-**Confirmar/Cancelar**, todos los usuarios (plan, vencimiento, estado, descargas de hoy) con **Bloquear/Desbloquear**, y los últimos pagos.
+Entras con el usuario `admin`. Muestra ingresos totales, usuarios activos, descargas (hoy y total), pagos sin
+completar (checkouts de Stripe abandonados, con **Cancelar** — no hay botón de confirmar a mano: eso lo hace Stripe
+solo), todos los usuarios (plan, vencimiento, estado, correo, descargas de hoy) con **Bloquear/Desbloquear** y
+**Restablecer** contraseña, y los últimos pagos.
 
 ## Usuarios desde la terminal
 
@@ -83,9 +93,20 @@ npm run user:remove -- cliente1
 ## Datos y seguridad
 
 - `backend/data/` (usuarios, pagos, sesiones, auditoría, clave de firma) y `backend/.env` **no se suben a git** ni se comparten.
-- Contraseñas con `scrypt`; sesión en cookie `httpOnly`; peticiones de otros sitios rechazadas; 5 intentos de login fallidos (por cuenta y desde la misma IP) bloquean 15 min; el intento se cuenta al instante, así que una ráfaga simultánea tampoco se cuela.
-- El administrador se reconoce por su **ID numérico** de Telegram (se fija solo la primera vez que `@tostilocos` le escribe al bot, o lo pones en `ADMIN_TELEGRAM_ID`), no por su @usuario.
-- Al pedir `/recuperar` se cierran todas las sesiones abiertas de esa cuenta.
-- Los archivos descargados no se guardan en el proyecto: llegan por la descarga del navegador y se borran solos a los 10 minutos
-  (`~/.cache/duokit/jobs/`).
+- **Stripe exige datos fiscales (RFC) de la cuenta a la que se le paga** para activarla en México y poder retirar a una
+  cuenta bancaria — no hay forma de evitarlo, ni cambiando de procesador (es un requisito regulatorio, no de Stripe).
+- El webhook (`/api/webhook/stripe`) verifica la firma de cada evento con `STRIPE_WEBHOOK_SECRET` antes de activar
+  nada; una petición sin esa firma (o con una falsa) se rechaza con 400 y no activa ninguna cuenta.
+- Contraseñas con `scrypt`; sesión en cookie `httpOnly`; peticiones de otros sitios rechazadas; 5 intentos de login
+  fallidos (por cuenta y desde la misma IP) bloquean 15 min; el intento se cuenta al instante, así que una ráfaga
+  simultánea tampoco se cuela.
+- La contraseña de una cuenta nueva se muestra **una sola vez**, en `/pago` justo después de pagar (o al
+  restablecerla desde "Mi cuenta" o desde `/admin`); nunca se guarda en texto claro ni se puede volver a consultar.
+- Los archivos descargados no se guardan en el proyecto: llegan por la descarga del navegador y se borran solos a
+  los 10 minutos (`~/.cache/duokit/jobs/`).
 - Detrás de nginx/Cloudflare pon `TRUST_PROXY=1` en `backend/.env` para ver la IP real del cliente, y sirve todo por HTTPS.
+
+## Contacto de soporte
+
+`VITE_SUPPORT_URL` (en el `.env` de la raíz del proyecto) es el enlace que ven los clientes para pedir ayuda —
+por defecto `https://t.me/tostilocos`. Es tu chat personal de Telegram, no un bot: revísalo tú.
