@@ -4,9 +4,13 @@ const auth = require('./auth');
 const audit = require('./audit');
 const limits = require('./limits');
 const health = require('./health');
-const { LIMITS } = require('./plans');
-const telegram = require('./telegram');
+const { LIMITS, PLANS } = require('./plans');
 const adminRouter = require('./admin');
+const billing = require('./billing');
+const payments = require('./payments');
+const stripeCheckout = require('./stripe-checkout');
+const credentials = require('./credentials');
+const { buildReceipt } = require('./receipts');
 const { strategyArgs: ytdlpStrategyArgs } = require('./ytdlp-strategy');
 const { spawn } = require('child_process');
 const path = require('path');
@@ -51,6 +55,47 @@ app.use((req, res, next) => {
 });
 // Para que el hospedaje (Railway u otro) sepa que el proceso sigue vivo. No revela nada del negocio.
 app.get('/healthz', (req, res) => res.json({ ok: true }));
+
+// Webhook de Stripe: viene de los servidores de Stripe, no de un navegador, así que va ANTES de sameOriginOnly
+// (que es una defensa pensada para peticiones de navegador) y con el cuerpo crudo (express.raw), no parseado como
+// JSON, porque la firma que lo autentica (Stripe-Signature) se calcula sobre los bytes exactos que Stripe mandó.
+app.post('/api/webhook/stripe', express.raw({ type: 'application/json', limit: '100kb' }), async (req, res) => {
+  let event;
+  try {
+    event = stripeCheckout.verifyWebhookEvent(req.body, req.headers['stripe-signature']);
+  } catch (err) {
+    console.error('Webhook de Stripe con firma inválida:', err.message);
+    return res.status(400).send('Firma inválida.');
+  }
+  if (event.type === 'checkout.session.completed') {
+    const session = event.data.object;
+    const reference = session.metadata?.reference;
+    if (!reference) {
+      console.error('Webhook de Stripe: checkout.session.completed sin metadata.reference', session.id);
+    } else {
+      try {
+        const result = await billing.confirm(reference, 'stripe', {
+          email: session.customer_details?.email || null,
+          payerName: session.customer_details?.name || null,
+        });
+        // La pantalla de "pago exitoso" (session_id en la URL de vuelta) consulta esto para mostrar las credenciales.
+        credentials.stash(session.id, {
+          username: result.user.username,
+          name: result.user.name,
+          created: result.created,
+          password: result.created ? result.password : null,
+          accessUntil: result.accessUntil,
+        });
+      } catch (err) {
+        // Reintentar no lo arregla: ya estaba pagado/cancelado, o la referencia no existe. Se responde 200 de todos
+        // modos para que Stripe no siga reintentando un evento que nunca va a poder procesarse distinto.
+        console.error(`Webhook de Stripe: no se pudo confirmar ${reference}:`, err.message);
+      }
+    }
+  }
+  // Stripe solo necesita saber que se recibió; espera una respuesta rápida.
+  res.json({ received: true });
+});
 
 app.use(express.json({ limit: '10kb' }));
 app.use(auth.sameOriginOnly);
@@ -405,6 +450,73 @@ app.get('/api/auth/me', (req, res) => {
   res.json({ user: auth.publicUser(result.user) });
 });
 
+// Genera una contraseña nueva para la cuenta con la que ya iniciaste sesión (equivalente al viejo "/recuperar" del
+// bot, pero solo sirve si todavía puedes entrar). Cierra las demás sesiones abiertas; esta se queda activa.
+app.post('/api/account/reset-password', auth.requireAuth, async (req, res) => {
+  const password = auth.generatePassword();
+  await auth.setPassword(req.user.id, password);
+  auth.revokeUserSessions(req.user.id, auth.currentSid(req));
+  audit.log('password_reset', { userId: req.user.id, username: req.user.username, by: 'self' });
+  res.json({ password });
+});
+
+// ---------------------------------------------------------------------------
+// Compra (pública: no hace falta haber iniciado sesión — es justo cómo se crea la cuenta)
+// ---------------------------------------------------------------------------
+
+// Tope simple por IP: crear una sesión de Stripe por cada clic es normal, pero no cientos por minuto.
+const checkoutHits = new Map();
+function checkoutAllowed(ip) {
+  const now = Date.now();
+  const recent = (checkoutHits.get(ip) || []).filter((t) => now - t < 60000);
+  recent.push(now);
+  checkoutHits.set(ip, recent);
+  return recent.length <= 10;
+}
+
+// Crea la referencia interna y la sesión de pago, y manda al navegador derecho a Stripe. El nombre, el correo y la
+// aceptación de los términos los recoge el propio Stripe (billing_address_collection en stripe-checkout.js);
+// aceptar los términos se confirma en el propio sitio, antes de llamar a esto (ver Landing.jsx).
+app.post('/api/checkout', async (req, res) => {
+  if (!checkoutAllowed(req.ip)) return res.status(429).json({ error: 'Demasiados intentos. Espera un momento.' });
+  if (!stripeCheckout.enabled) return res.status(503).json({ error: 'Las compras no están disponibles por ahora.' });
+  const { plan, acceptedTerms } = req.body || {};
+  if (!Object.hasOwn(PLANS, plan)) return res.status(400).json({ error: 'Plan inválido.' });
+  if (acceptedTerms !== true) return res.status(400).json({ error: 'Debes aceptar los términos para continuar.' });
+
+  const payment = payments.create({ plan, termsAcceptedAt: new Date().toISOString() });
+  try {
+    const session = await stripeCheckout.createCheckoutSession({ reference: payment.reference, plan });
+    payments.update(payment.reference, { stripeSessionId: session.id });
+    audit.log('checkout_started', { reference: payment.reference, plan, ip: req.ip });
+    res.json({ url: session.url });
+  } catch (err) {
+    console.error('No se pudo crear la sesión de Stripe:', err.message);
+    payments.update(payment.reference, { status: 'cancelled', cancelledAt: new Date().toISOString() });
+    res.status(502).json({ error: 'No se pudo iniciar el pago. Inténtalo de nuevo en un momento.' });
+  }
+});
+
+// La pantalla de "pago exitoso" pregunta esto con el session_id que Stripe le puso en la URL de vuelta, hasta que
+// el webhook (que puede tardar unos segundos) ya haya activado la cuenta. sessionId es un id largo y al azar de
+// Stripe: nadie más que quien acaba de pagar (y trae el enlace de vuelta) lo conoce.
+app.get('/api/checkout-status/:sessionId', (req, res) => {
+  const entry = credentials.peek(req.params.sessionId);
+  if (!entry) return res.json({ ready: false });
+  const { username, name, created, password, accessUntil } = entry;
+  res.json({ ready: true, username, name, created, password, accessUntil });
+});
+
+// El recibo, descargable desde la pantalla de "pago exitoso" con el mismo session_id (nadie más lo conoce).
+app.get('/api/receipt/:sessionId', async (req, res) => {
+  const payment = payments.getByStripeSession(req.params.sessionId);
+  if (!payment || payment.status !== 'paid') return res.status(404).json({ error: 'Recibo no encontrado.' });
+  const pdf = await buildReceipt(payment, 'paid');
+  res.setHeader('Content-Type', 'application/pdf');
+  res.setHeader('Content-Disposition', `attachment; filename="recibo-${payment.reference}.pdf"`);
+  res.send(pdf);
+});
+
 app.use('/api/admin', adminRouter);
 
 // Todo lo que sigue requiere haber iniciado sesión.
@@ -519,5 +631,5 @@ app.use((err, req, res, next) => {
 app.listen(PORT, HOST, () => {
   console.log(`Backend de yt-dlp escuchando en http://${HOST}:${PORT}`);
   console.log(`Archivos temporales (se borran solos): ${JOBS_ROOT}`);
-  telegram.start();
+  if (!stripeCheckout.enabled) console.log('Stripe desactivado: falta STRIPE_SECRET_KEY en backend/.env (las compras no funcionarán).');
 });

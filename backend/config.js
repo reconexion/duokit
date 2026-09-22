@@ -1,4 +1,4 @@
-// Configuración del negocio. Los secretos (token del bot) van en backend/.env, nunca en el código.
+// Configuración del negocio. Los secretos (claves de Stripe) van en backend/.env, nunca en el código.
 const path = require('path');
 
 // Vencimientos y "descargas de hoy" se cuentan en hora de México, sin importar la zona horaria del servidor
@@ -11,26 +11,23 @@ try {
   if (err.code !== 'ENOENT') throw err;
 }
 
-const ACCOUNT = (process.env.SELLER_ACCOUNT || '').trim();
-
 module.exports = {
-  // Bot de Telegram: créalo con @BotFather y pega el token en backend/.env (TELEGRAM_BOT_TOKEN=...).
-  TELEGRAM_BOT_TOKEN: process.env.TELEGRAM_BOT_TOKEN || '',
-  TELEGRAM_API_URL: process.env.TELEGRAM_API_URL || 'https://api.telegram.org',
-  // Quién recibe los avisos de pago. Debe escribirle /start al bot una vez para poder recibirlos.
-  ADMIN_TELEGRAM: (process.env.ADMIN_TELEGRAM || 'tostilocos').replace(/^@/, '').toLowerCase(),
-  // ID numérico de Telegram del administrador (opcional). Si no se pone, se fija solo la primera vez que el @usuario
-  // de arriba le escribe al bot. Así, si ese @usuario cambia de dueño algún día, el nuevo dueño no obtiene permisos.
-  ADMIN_TELEGRAM_ID: (process.env.ADMIN_TELEGRAM_ID || '').trim(),
-  // Dirección pública de la app (se usa en los mensajes que recibe el cliente).
+  // Dirección pública de la app: a donde Stripe regresa al cliente después de pagar.
   PUBLIC_URL: (process.env.PUBLIC_URL || 'http://localhost:5173').replace(/\/$/, ''),
+  // Cobro con tarjeta por Stripe Checkout: el cliente paga solo, sin esperar que el administrador confirme a mano.
+  // STRIPE_SECRET_KEY (sk_test_/sk_live_) se saca del Dashboard de Stripe; STRIPE_WEBHOOK_SECRET (whsec_...) se
+  // genera al crear el webhook que apunta a /api/webhook/stripe. Sin la clave secreta, Stripe queda desactivado.
+  STRIPE_SECRET_KEY: (process.env.STRIPE_SECRET_KEY || '').trim(),
+  STRIPE_WEBHOOK_SECRET: (process.env.STRIPE_WEBHOOK_SECRET || '').trim(),
+  // Host/puerto/protocolo alternativos para la API de Stripe: solo para pruebas (un Stripe falso local), nunca en producción.
+  STRIPE_API_HOST: process.env.STRIPE_API_HOST || undefined,
+  STRIPE_API_PORT: process.env.STRIPE_API_PORT || undefined,
+  STRIPE_API_PROTOCOL: process.env.STRIPE_API_PROTOCOL || undefined,
   SELLER: {
-    // Alias público del negocio. Nunca pongas aquí un nombre real: aparece en recibos, en el bot y en el panel.
+    // Alias público del negocio. Nunca pongas aquí un nombre real: aparece en recibos y en el panel.
     name: (process.env.SELLER_NAME || 'DuoKit').trim(),
-    // Cuenta donde se reciben las transferencias (SELLER_ACCOUNT en backend/.env). Una CLABE tiene 18 dígitos;
-    // con 16 es una tarjeta de débito, y así se le nombra al cliente.
-    account: ACCOUNT,
-    accountLabel: ACCOUNT.replace(/\D/g, '').length === 18 ? 'CLABE' : 'tarjeta de débito',
-    contact: '@tostilocos',
+    // A dónde mandar a alguien que necesita ayuda (soporte, un pago que no se activó, perdió su contraseña y ya
+    // cerró sesión en todos lados). Es un contacto manual, no automatizado: solo aparece en textos.
+    contact: (process.env.SELLER_CONTACT || '@tostilocos').trim(),
   },
 };

@@ -28,7 +28,7 @@ before(async () => {
 after(() => srv.stop());
 
 test('confirmar varios pagos a la vez no pierde cuentas', async () => {
-  srv.run(`const p = require('./payments'); for (const i of [1, 2, 3]) p.create({ plan: 'basic', telegramId: 900 + i, telegramUsername: 'cli' + i, payerName: 'Cliente Prueba' });`);
+  srv.run(`const p = require('./payments'); for (let i = 0; i < 3; i++) p.create({ plan: 'basic' });`);
   const results = await Promise.all([1, 2, 3].map((n) => adminApi.post(`/api/admin/payments/DUO-${YEAR}-00${n}/confirm`)));
   assert.deepEqual(results.map((r) => r.status), [200, 200, 200]);
   const { json } = await adminApi.get('/api/admin/summary');

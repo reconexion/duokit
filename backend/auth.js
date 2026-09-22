@@ -26,8 +26,11 @@ fs.mkdirSync(DATA_DIR, { recursive: true, mode: 0o700 });
 // Usuarios
 // ---------------------------------------------------------------------------
 
-// Los usuarios creados antes de los planes se tratan como Básico, activos y sin Telegram.
-const withDefaults = (u) => ({ role: 'user', plan: 'basic', status: 'active', telegramId: null, telegramUsername: null, ...u });
+// Los usuarios creados antes de los planes se tratan como Básico, activos y sin correo.
+const withDefaults = (u) => ({ role: 'user', plan: 'basic', status: 'active', email: null, ...u });
+
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const normalizeEmail = (email) => String(email || '').trim().toLowerCase();
 
 function readUsers() {
   try {
@@ -97,17 +100,19 @@ async function verifyPassword(password, stored) {
 // "no existe" no sea más rápido que responder "contraseña incorrecta".
 const DUMMY_HASH_PROMISE = hashPassword(crypto.randomBytes(16).toString('hex'));
 
-async function addUser({ username, name, password, expiresAt = null, plan = 'basic', role = 'user', telegramId = null, telegramUsername = null }) {
+async function addUser({ username, name, password, expiresAt = null, plan = 'basic', role = 'user', email = null }) {
   const normalized = normalizeUsername(username);
   if (!USERNAME_REGEX.test(normalized)) throw new Error('Usuario no válido.');
   if (!String(name || '').trim()) throw new Error('El nombre es obligatorio.');
   if (expiresAt !== null && !isValidDate(expiresAt)) throw new Error('La fecha de vencimiento debe ser AAAA-MM-DD.');
+  const normalizedEmail = email === null ? null : normalizeEmail(email);
+  if (normalizedEmail !== null && !EMAIL_REGEX.test(normalizedEmail)) throw new Error('El correo no es válido.');
   const passwordHash = await hashPassword(password);
   // Desde aquí no hay más `await`: leer y escribir la lista en el mismo turno evita pisar a otro usuario que se cree
   // (o un bloqueo/renovación que se guarde) mientras se calculaba el hash.
   const users = readUsers();
   if (users.some((u) => u.username === normalized)) throw new Error('Ya existe ese nombre de usuario.');
-  if (telegramId !== null && users.some((u) => u.telegramId === String(telegramId))) throw new Error('Ese Telegram ya tiene una cuenta.');
+  if (normalizedEmail !== null && users.some((u) => u.email === normalizedEmail)) throw new Error('Ese correo ya tiene una cuenta.');
   const user = {
     id: crypto.randomUUID(),
     username: normalized,
@@ -117,8 +122,7 @@ async function addUser({ username, name, password, expiresAt = null, plan = 'bas
     plan,
     role,
     status: 'active',
-    telegramId: telegramId === null ? null : String(telegramId),
-    telegramUsername,
+    email: normalizedEmail,
     createdAt: new Date().toISOString(),
   };
   writeUsers([...users, user]);
@@ -153,7 +157,7 @@ function listUsers() {
     role: u.role,
     plan: u.plan,
     status: u.status,
-    telegramUsername: u.telegramUsername,
+    email: u.email,
     createdAt: u.createdAt,
     expiresAt: u.expiresAt || null,
     expired: isExpired(u),
@@ -161,7 +165,7 @@ function listUsers() {
 }
 
 const findUserById = (id) => readUsers().find((u) => u.id === id) || null;
-const findUserByTelegramId = (telegramId) => readUsers().find((u) => u.telegramId && u.telegramId === String(telegramId)) || null;
+const findUserByEmail = (email) => readUsers().find((u) => u.email && u.email === normalizeEmail(email)) || null;
 
 // Cambia campos de un usuario y devuelve el usuario ya actualizado (o null si no existe).
 function updateUser(id, patch) {
@@ -186,7 +190,7 @@ function banUser(id, reason) {
 
 const unbanUser = (id) => updateUser(id, { status: 'active', bannedAt: null, banReason: null });
 
-// Nombre de usuario libre a partir de uno sugerido (p. ej. el de Telegram).
+// Nombre de usuario libre a partir de uno sugerido (p. ej. el nombre que dio al pagar).
 function uniqueUsername(preferred) {
   const taken = new Set(readUsers().map((u) => u.username));
   // Quita los acentos antes de filtrar: "María López" -> "marialopez", no "maralpez".
@@ -322,9 +326,16 @@ function closeSession(sid) {
   if (sessions.length !== before) saveSessions();
 }
 
-function revokeUserSessions(userId) {
-  sessions = sessions.filter((x) => x.userId !== userId);
+// `exceptSid`: para cuando la propia sesión actual pide un cambio (p. ej. generar contraseña nueva) y no debe
+// cerrarse a sí misma, solo las demás (así no expulsa a quien acaba de pedirlo).
+function revokeUserSessions(userId, exceptSid = null) {
+  sessions = sessions.filter((x) => x.userId !== userId || x.sid === exceptSid);
   saveSessions();
+}
+
+// El sid de la sesión de la petición actual (o null si no hay una válida). Sirve para "cerrar las demás, no esta".
+function currentSid(req) {
+  return readToken(parseCookies(req.headers.cookie)[COOKIE_NAME])?.sid || null;
 }
 
 const activeSessionCount = (userId) => sessions.filter((x) => x.userId === userId && x.expiresAt > Date.now()).length;
@@ -456,6 +467,7 @@ function clearFailures(ip, username) {
 
 module.exports = {
   USERNAME_REGEX,
+  EMAIL_REGEX,
   isValidDate,
   isExpired,
   expiredMessage,
@@ -465,7 +477,7 @@ module.exports = {
   removeUser,
   listUsers,
   findUserById,
-  findUserByTelegramId,
+  findUserByEmail,
   updateUser,
   setPassword,
   banUser,
@@ -483,7 +495,9 @@ module.exports = {
   closeCurrentSession,
   activeSessionCount,
   revokeUserSessions,
+  currentSid,
   beginAttempt,
   clearFailures,
   normalizeUsername,
+  normalizeEmail,
 };

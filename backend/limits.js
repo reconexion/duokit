@@ -2,7 +2,6 @@
 // y bloqueo automático si alguien insiste en pasarse de los límites.
 const audit = require('./audit');
 const auth = require('./auth');
-const billing = require('./billing');
 const { LIMITS, planOf, money } = require('./plans');
 
 // Choques seguidos con el mismo límite cuentan como uno solo: dentro del mismo minuto para el tope por minuto y dentro de
@@ -19,11 +18,10 @@ function registerStrike(user, kind, ip) {
   }
   if (audit.strikesLast24h(user.id) < LIMITS.strikesToBan) return false;
 
+  // No hay a quién avisarle al instante (sin Telegram): queda en el registro y se ve en /admin (la cuenta aparece
+  // como bloqueada en la lista de usuarios).
   auth.banUser(user.id, 'Bloqueo automático: superó los límites de uso');
   audit.log('auto_ban', { userId: user.id, username: user.username, ip });
-  const notifier = billing.getNotifier();
-  notifier?.notifyAdmin(`🚫 Bloqueo automático: ${user.username} superó los límites de uso ${LIMITS.strikesToBan} veces en 24 h. Puedes desbloquearlo desde /admin.`);
-  if (user.telegramId) notifier?.notifyUser(user.telegramId, `Tu cuenta de duokit fue suspendida por superar los límites de uso. Escribe a @tostilocos si crees que fue un error.`);
   return true;
 }
 

@@ -11,7 +11,7 @@ const BACKEND = path.join(__dirname, '..');
 const DAY = 86400000;
 
 test('sin TZ definida, el negocio cuenta el día en hora de México', () => {
-  const env = { ...process.env, TELEGRAM_BOT_TOKEN: '' };
+  const env = { ...process.env };
   delete env.TZ;
   const offset = execFileSync('node', ['-e', "require('./config'); console.log(new Date().getTimezoneOffset())"], { cwd: BACKEND, env, encoding: 'utf8' });
   assert.equal(Number(offset), 360, 'México (sin horario de verano) va 6 h detrás de UTC');

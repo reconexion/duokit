@@ -1,11 +1,13 @@
 // Utilidades para las pruebas: levantan el backend real en un puerto libre, con datos temporales,
-// un yt-dlp falso (sin red) y, si se pide, un Telegram falso. Nada toca backend/data ni el bot real.
+// un yt-dlp falso (sin red) y, si se pide, un Stripe falso. Nada toca backend/data.
 const { spawn, execFileSync } = require('node:child_process');
 const fs = require('node:fs');
 const http = require('node:http');
 const net = require('node:net');
 const os = require('node:os');
 const path = require('node:path');
+const qs = require('qs');
+const Stripe = require('stripe');
 
 const BACKEND = path.join(__dirname, '..');
 
@@ -34,7 +36,7 @@ const freePort = () =>
     });
   });
 
-async function startServer(extraEnv = {}, { dist } = {}) {
+async function startServer(extraEnv = {}, { dist, stripe } = {}) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'duokit-test-'));
   if (dist) {
     fs.mkdirSync(path.join(root, 'dist'));
@@ -50,11 +52,18 @@ async function startServer(extraEnv = {}, { dist } = {}) {
     DATA_DIR: path.join(root, 'data'),
     DUOKIT_TMP_DIR: path.join(root, 'jobs'),
     PORT: String(port),
-    TELEGRAM_BOT_TOKEN: '', // vacío y ya definido: .env no lo pisa
-    SELLER_ACCOUNT: '012345678901234567',
-    ADMIN_TELEGRAM_ID: '',
     PATH: `${bin}:${process.env.PATH}`,
     FAKE_DIR: root,
+    // Si la prueba pasa un Stripe falso (startFakeStripeApi), el backend le habla a él en vez de a la API real.
+    ...(stripe
+      ? {
+          STRIPE_SECRET_KEY: 'sk_test_fake',
+          STRIPE_WEBHOOK_SECRET: STRIPE_TEST_WEBHOOK_SECRET,
+          STRIPE_API_HOST: stripe.host,
+          STRIPE_API_PORT: String(stripe.port),
+          STRIPE_API_PROTOCOL: stripe.protocol,
+        }
+      : {}),
     ...extraEnv,
   };
   const child = spawn('node', ['server.js'], { cwd: BACKEND, env, stdio: ['ignore', 'pipe', 'pipe'] });
@@ -133,55 +142,85 @@ async function waitJob(api, jobId, timeoutMs = 15000) {
   }
 }
 
-// Telegram falso: guarda lo que el bot envía y sirve los mensajes que la prueba "escribe".
-async function startFakeTelegram() {
-  const queue = [];
-  const sent = [];
-  const menus = []; // menús de comandos publicados: { scope: chat_id | null, commands: [...] }
-  let updateId = 100;
+const STRIPE_TEST_WEBHOOK_SECRET = 'whsec_test_secret';
+
+// Stripe falso: solo atiende lo que NUESTRO backend le pide a la API de Stripe (crear y consultar una sesión de
+// Checkout). El webhook que Stripe manda DE VUELTA (cuando alguien paga) es una entrega aparte, no pasa por aquí:
+// se simula con fireStripeWebhook, firmado en local con el mismo secreto, tal como lo verifica server.js de verdad.
+async function startFakeStripeApi() {
+  const sessions = new Map();
+  let n = 0;
   const server = http.createServer(async (req, res) => {
     const chunks = [];
     for await (const chunk of req) chunks.push(chunk);
-    const raw = Buffer.concat(chunks);
-    const reply = (result) => {
-      res.setHeader('content-type', 'application/json');
-      res.end(JSON.stringify({ ok: true, result }));
+    const send = (status, body) => {
+      res.writeHead(status, { 'content-type': 'application/json' });
+      res.end(JSON.stringify(body));
     };
-    const method = req.url.split('/').pop();
-    if (method === 'getMe') return reply({ username: 'fake_bot' });
-    if (method === 'getUpdates') {
-      const { offset } = JSON.parse(raw);
-      const pending = queue.filter((u) => u.update_id >= offset);
-      return pending.length ? reply(pending) : setTimeout(() => reply([]), 200);
+    if (req.method === 'POST' && req.url === '/v1/checkout/sessions') {
+      const body = qs.parse(Buffer.concat(chunks).toString());
+      const id = `cs_test_${++n}`;
+      const session = {
+        id,
+        object: 'checkout.session',
+        url: `http://fake-stripe.test/pay/${id}`,
+        status: 'open',
+        payment_status: 'unpaid',
+        client_reference_id: body.client_reference_id ?? null,
+        metadata: body.metadata ?? {},
+        amount_total: Number(body.line_items?.[0]?.price_data?.unit_amount ?? 0),
+        currency: body.line_items?.[0]?.price_data?.currency ?? 'mxn',
+      };
+      sessions.set(id, session);
+      return send(200, session);
     }
-    if (method === 'setMyCommands') {
-      const p = JSON.parse(raw);
-      menus.push({ scope: p.scope?.chat_id ?? null, commands: p.commands.map((c) => c.command) });
+    const match = req.method === 'GET' && /^\/v1\/checkout\/sessions\/([^/?]+)/.exec(req.url);
+    if (match) {
+      const session = sessions.get(match[1]);
+      if (!session) return send(404, { error: { message: 'No such checkout session', type: 'invalid_request_error' } });
+      return send(200, session);
     }
-    if (method === 'sendMessage') {
-      const p = JSON.parse(raw);
-      sent.push({ to: Number(p.chat_id), text: p.text });
-    } else if (method === 'sendDocument') {
-      sent.push({ to: Number(/name="chat_id"\r\n\r\n(\d+)/.exec(raw.toString('latin1'))?.[1]), text: '[PDF]' });
-    }
-    return reply({});
+    send(404, { error: { message: 'not found', type: 'invalid_request_error' } });
   });
   await new Promise((resolve) => server.listen(0, resolve));
-  const from = (id, username) => ({ id, username, first_name: username || 'Cliente', is_bot: false });
+  const { port } = server.address();
   return {
-    url: `http://localhost:${server.address().port}`,
-    menus,
-    from,
-    say: (user, text) => queue.push({ update_id: ++updateId, message: { chat: { id: user.id, type: 'private' }, from: user, text } }),
-    tap: (user, data) =>
-      queue.push({ update_id: ++updateId, callback_query: { id: `q${updateId}`, from: user, data, message: { chat: { id: user.id, type: 'private' } } } }),
-    // Espera a que el bot conteste algo (nada más se recibe durante `settleMs`) y devuelve lo enviado desde la última vez.
-    async replies(settleMs = 700) {
-      await sleep(settleMs);
-      return sent.splice(0);
-    },
+    host: 'localhost',
+    port,
+    protocol: 'http',
+    sessions,
+    // Como si el cliente ya hubiera pagado en Stripe (antes de que llegue el webhook que de verdad activa la cuenta).
+    // email/name son lo que Stripe recoge al cobrar (billing_address_collection): así llegan en customer_details.
+    markComplete: (id, { email = 'cliente@example.com', name = 'Cliente de Prueba' } = {}) =>
+      Object.assign(sessions.get(id), { status: 'complete', payment_status: 'paid', customer_details: { email, name } }),
     stop: () => server.close(),
   };
 }
 
-module.exports = { startServer, addUser, client, sleep, waitJob, startFakeTelegram };
+// Firma y manda un webhook checkout.session.completed directo al backend bajo prueba, exactamente como lo verifica
+// server.js (Stripe.webhooks.generateTestHeaderString firma en local, sin red, con el mismo algoritmo que Stripe usa
+// de verdad). `secret` debe coincidir con STRIPE_WEBHOOK_SECRET del servidor, o la firma sale inválida a propósito.
+async function fireStripeWebhook(server, session, { secret = STRIPE_TEST_WEBHOOK_SECRET, type = 'checkout.session.completed' } = {}) {
+  const payload = JSON.stringify({
+    id: `evt_test_${Math.random().toString(36).slice(2)}`,
+    object: 'event',
+    type,
+    data: { object: session },
+  });
+  const header = Stripe.webhooks.generateTestHeaderString({ payload, secret });
+  const res = await fetch(`${server.base}/api/webhook/stripe`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', 'stripe-signature': header },
+    body: payload,
+  });
+  const text = await res.text();
+  let json = null;
+  try {
+    json = JSON.parse(text);
+  } catch {
+    /* no era JSON */
+  }
+  return { status: res.status, json, text };
+}
+
+module.exports = { startServer, addUser, client, sleep, waitJob, startFakeStripeApi, fireStripeWebhook, STRIPE_TEST_WEBHOOK_SECRET };

@@ -1,5 +1,6 @@
-// Pagos por transferencia (SPEI). Cada compra genera una referencia única: DUO-2026-001, DUO-2026-002...
-// El pago queda "pending" hasta que el administrador confirma que llegó la transferencia.
+// Pagos con tarjeta por Stripe Checkout. Cada compra genera una referencia interna única: DUO-2026-001, DUO-2026-002...
+// El pago se crea "pending" al abrir el checkout (todavía sin correo ni nombre: eso lo da Stripe) y queda "paid"
+// cuando el webhook confirma que se completó (o, de emergencia, si el administrador lo confirma a mano con /confirmar).
 const fs = require('fs');
 const path = require('path');
 const { PLANS } = require('./plans');
@@ -35,51 +36,34 @@ function nextReference(list) {
 
 const normalizeReference = (ref) => String(ref || '').trim().toUpperCase();
 
-// Lo que el cliente escribe en el concepto de la transferencia: la referencia y su nombre ("DUO-2026-001 MARIA LOPEZ"),
-// para reconocerlo de un vistazo en el estado de cuenta. Los bancos suelen aceptar en el concepto solo letras y números
-// sin acentos y hasta 40 caracteres, así que el nombre se normaliza y el conjunto se recorta a ese largo.
-// La referencia en sí (DUO-AAAA-NNN) no cambia: es el identificador que usan los botones y /confirmar.
-function paymentConcept(payment) {
-  const name = String(payment.payerName || '')
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .toUpperCase()
-    .replace(/[^A-Z0-9 ]/g, '')
-    .replace(/\s+/g, ' ')
-    .trim();
-  return `${payment.reference} ${name}`.trim().slice(0, 40).trim();
-}
-
 const get = (reference) => read().find((p) => p.reference === normalizeReference(reference)) || null;
 const list = () => read();
+// El webhook de Stripe lee la referencia directo de metadata, así que normalmente no hace falta esto; sirve como
+// respaldo y para que el panel pueda mostrar a qué sesión de Stripe corresponde cada pago.
+const getByStripeSession = (sessionId) => read().find((p) => p.stripeSessionId === sessionId) || null;
 
-// Si la persona ya tiene un pago pendiente del mismo plan, se reutiliza (así no se acumulan referencias).
-function create({ plan, telegramId, telegramUsername, telegramName, payerName, termsAcceptedAt }) {
+// Se crea al abrir el checkout, antes de saber quién es el cliente (Stripe todavía no ha recogido su correo ni su
+// nombre): email/payerName llegan después, con confirm() (billing.js), cuando el webhook trae esos datos.
+function create({ plan, termsAcceptedAt }) {
   const all = read();
-  const existing = all.find((p) => p.status === 'pending' && p.telegramId === String(telegramId) && p.plan === plan);
-  // Si ya tenía una referencia pendiente del mismo plan, se reutiliza (no se duplica), pero se refresca la fecha de
-  // aceptación: acaba de volver a tocar "Acepto los términos" para esta misma compra.
-  if (existing) return { payment: termsAcceptedAt ? update(existing.reference, { termsAcceptedAt }) : existing, reused: true };
   const payment = {
     reference: nextReference(all),
     plan,
     amount: PLANS[plan].price,
     status: 'pending', // pending | paid | cancelled
-    telegramId: String(telegramId),
-    telegramUsername: telegramUsername || null,
-    telegramName: telegramName || null,
-    payerName: payerName || null, // nombre real que dio el cliente: sirve para reconocer la transferencia en el banco
+    email: null,
+    payerName: null,
     createdAt: new Date().toISOString(),
-    reportedAt: null, // cuando la persona dijo "ya pagué"
     confirmedAt: null,
     cancelledAt: null,
     userId: null,
     username: null,
     accessUntil: null,
-    termsAcceptedAt: termsAcceptedAt || null, // cuándo tocó "Acepto los términos" antes de generar esta referencia
+    termsAcceptedAt: termsAcceptedAt || null, // cuándo aceptó los términos, antes de ir a pagar
+    stripeSessionId: null, // se rellena después de crear la sesión de pago (payments.update)
   };
   write([...all, payment]);
-  return { payment, reused: false };
+  return payment;
 }
 
 function update(reference, patch) {
@@ -91,9 +75,6 @@ function update(reference, patch) {
   return payment;
 }
 
-// Último nombre que la persona dio en una compra anterior (así no se lo pedimos otra vez).
-const knownName = (telegramId) => read().filter((p) => p.telegramId === String(telegramId) && p.payerName).at(-1)?.payerName || null;
-
 const revenue = () => read().filter((p) => p.status === 'paid').reduce((sum, p) => sum + p.amount, 0);
 
-module.exports = { create, get, list, update, revenue, knownName, normalizeReference, paymentConcept };
+module.exports = { create, get, list, update, revenue, normalizeReference, getByStripeSession };

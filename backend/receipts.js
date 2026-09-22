@@ -1,8 +1,7 @@
-// Recibos en PDF. Se generan al crear la referencia (pendiente de pago) y otra vez al confirmar el pago.
+// Recibo en PDF, generado al vuelo y descargable desde la pantalla de "pago exitoso" (GET /api/receipt/:sessionId).
 const PDFDocument = require('pdfkit');
 const { PLANS, money } = require('./plans');
 const { SELLER, PUBLIC_URL } = require('./config');
-const { paymentConcept } = require('./payments');
 
 const GREEN = '#099250';
 const INK = '#181d27';
@@ -17,7 +16,8 @@ const formatDay = (yyyyMmDd) => {
   return new Date(y, m - 1, d).toLocaleDateString('es-MX', { day: 'numeric', month: 'long', year: 'numeric' });
 };
 
-// status: 'pending' | 'paid'. Devuelve el PDF como Buffer.
+// Devuelve el PDF como Buffer. `status` casi siempre es 'paid' (así se descarga al confirmarse el cobro);
+// 'pending' queda por si algún día hace falta un cobro manual, aunque hoy nada lo usa.
 function buildReceipt(payment, status = payment.status === 'paid' ? 'paid' : 'pending') {
   const plan = PLANS[payment.plan];
   const doc = new PDFDocument({ size: 'LETTER', margin: 56, info: { Title: `Recibo ${payment.reference}`, Author: SELLER.name } });
@@ -50,7 +50,6 @@ function buildReceipt(payment, status = payment.status === 'paid' ? 'paid' : 'pe
     ['Precio', money(payment.amount)],
     ['Período', plan.periodLabel],
     ['Vendedor', SELLER.name],
-    [SELLER.accountLabel.charAt(0).toUpperCase() + SELLER.accountLabel.slice(1), SELLER.account],
     ['Contacto', SELLER.contact],
   ];
   if (paid) {
@@ -65,24 +64,6 @@ function buildReceipt(payment, status = payment.status === 'paid' ? 'paid' : 'pe
     doc.fillColor(INK).font('Helvetica-Bold').fontSize(12).text(value, left + 160, y - 1, { width: contentWidth - 160 });
     y += 30;
     doc.moveTo(left, y - 8).lineTo(left + contentWidth, y - 8).strokeColor(LINE).stroke();
-  }
-
-  // Instrucciones de pago (solo mientras esté pendiente)
-  if (!paid) {
-    y += 8;
-    doc.roundedRect(left, y, contentWidth, 96, 8).fill('#f6fef9');
-    doc.fillColor(GREEN).font('Helvetica-Bold').fontSize(11).text('Cómo pagar', left + 16, y + 14);
-    doc
-      .fillColor(INK)
-      .font('Helvetica')
-      .fontSize(10.5)
-      .text(
-        `Transfiere ${money(payment.amount)} por SPEI a la ${SELLER.accountLabel} ${SELLER.account} y escribe en el concepto tu referencia completa, tal cual: ${paymentConcept(payment)}. ` +
-          'Cuando confirmemos tu pago recibirás tu usuario y contraseña por Telegram.',
-        left + 16,
-        y + 34,
-        { width: contentWidth - 32, lineGap: 2 },
-      );
   }
 
   // Pie

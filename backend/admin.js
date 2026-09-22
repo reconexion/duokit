@@ -6,6 +6,7 @@ const billing = require('./billing');
 const payments = require('./payments');
 const { planOf } = require('./plans');
 const diagnose = require('./diagnose');
+const health = require('./health');
 
 const router = express.Router();
 router.use(auth.requireAdmin);
@@ -15,11 +16,9 @@ const publicPayment = (p) => ({
   plan: p.plan,
   amount: p.amount,
   status: p.status,
-  telegramUsername: p.telegramUsername,
-  telegramName: p.telegramName,
+  email: p.email,
   payerName: p.payerName,
   createdAt: p.createdAt,
-  reportedAt: p.reportedAt,
   confirmedAt: p.confirmedAt,
   username: p.username,
   termsAcceptedAt: p.termsAcceptedAt || null,
@@ -52,12 +51,16 @@ router.get('/summary', (req, res) => {
       activeUsers: users.filter((u) => u.role !== 'admin' && u.status === 'active' && !u.expired).length,
       bannedUsers: users.filter((u) => u.status === 'banned').length,
     },
+    // Sin Telegram nadie te avisa en el momento: revisa esto de vez en cuando. Si no es null, varias descargas
+    // seguidas están fallando por YouTube/yt-dlp — suele arreglarse con `pipx upgrade yt-dlp`.
+    serviceAlert: health.status(),
     users,
     pending: pending.map(publicPayment).reverse(),
     recentPaid: paid.map(publicPayment).reverse().slice(0, 10),
   });
 });
 
+// Respaldo de emergencia: normalmente Stripe confirma solo, por el webhook. Esto es solo por si algún día falla.
 router.post('/payments/:reference/confirm', async (req, res) => {
   try {
     const result = await billing.confirm(req.params.reference, `admin:${req.user.username}`);
@@ -66,8 +69,9 @@ router.post('/payments/:reference/confirm', async (req, res) => {
       reference: result.payment.reference,
       username: result.user.username,
       created: result.created,
-      delivered: result.delivered,
-      credentials: result.credentials, // solo si no se pudo avisar por Telegram
+      // La contraseña solo viaja aquí si la cuenta se acaba de crear: no hay Telegram/correo para mandarla sola,
+      // así que el panel se la muestra al administrador para que se la dé al cliente por el medio que lo contactó.
+      password: result.created ? result.password : null,
     });
   } catch (err) {
     res.status(400).json({ error: err.message });
@@ -102,7 +106,6 @@ router.post('/users/:id/ban', (req, res) => {
   const reason = String(req.body?.reason || '').slice(0, 200) || 'Bloqueado por el administrador';
   auth.banUser(user.id, reason);
   audit.log('user_banned', { userId: user.id, username: user.username, by: req.user.username, reason });
-  if (user.telegramId) billing.getNotifier()?.notifyUser(user.telegramId, 'Tu cuenta de duokit fue suspendida. Escribe a @tostilocos si crees que fue un error.');
   res.json({ ok: true });
 });
 
@@ -111,8 +114,20 @@ router.post('/users/:id/unban', (req, res) => {
   if (!user) return;
   auth.unbanUser(user.id);
   audit.log('user_unbanned', { userId: user.id, username: user.username, by: req.user.username });
-  if (user.telegramId) billing.getNotifier()?.notifyUser(user.telegramId, 'Tu cuenta de duokit está activa otra vez. Ya puedes entrar.');
   res.json({ ok: true });
+});
+
+// Restablecimiento manual: para cuando un cliente perdió su contraseña y no puede generarse una nueva él mismo
+// (porque eso requiere estar logueado, ver /api/account/reset-password). El administrador ve la contraseña nueva
+// una vez y se la da al cliente por el medio que use para contactarlo.
+router.post('/users/:id/reset-password', async (req, res) => {
+  const user = targetUser(req, res);
+  if (!user) return;
+  const password = auth.generatePassword();
+  await auth.setPassword(user.id, password);
+  auth.revokeUserSessions(user.id);
+  audit.log('password_reset', { userId: user.id, username: user.username, by: `admin:${req.user.username}` });
+  res.json({ ok: true, username: user.username, password });
 });
 
 module.exports = router;
