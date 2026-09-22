@@ -46,7 +46,7 @@ const FAQ = [
   { q: '¿Cómo pago?', a: 'Por transferencia SPEI. En Telegram te damos los datos de la cuenta y una referencia única; tú solo escribes esa referencia en el concepto.' },
   { q: '¿Cuánto tarda en activarse mi cuenta?', a: 'En cuanto confirmamos tu transferencia. Te llega el usuario y la contraseña por Telegram, junto con tu recibo.' },
   { q: '¿Puedo entrar desde varios dispositivos?', a: 'Sí, hasta 2 sesiones abiertas a la vez con la misma cuenta. Si abres una tercera, se cierra la más antigua.' },
-  { q: '¿Hay reembolsos?', a: 'No. Todas las compras son finales porque tu acceso se activa en cuanto confirmamos la transferencia. Si tienes un problema con tu acceso o con una descarga, escríbenos por Telegram y lo resolvemos.' },
+  { q: '¿Hay reembolsos?', a: 'Las compras son finales: no hay reembolso por cambio de opinión ni por no usar tu acceso. Sí hay reembolso si el servicio falla por nuestra culpa (por ejemplo, se cae el sistema). Escríbenos por Telegram y lo resolvemos.' },
   { q: '¿Qué pasa cuando vence el plan Básico?', a: 'Tu acceso termina en la fecha indicada. Para seguir, vuelves a mandar /comprar: la renovación suma 30 días a tu cuenta.' },
 ];
 
@@ -251,7 +251,7 @@ export default function Landing() {
             ))}
           </div>
           <p className="mt-8 text-center text-sm text-tertiary">
-            Todas las compras son finales: no hay reembolsos. Al comprar aceptas los{' '}
+            Compras finales; reembolso solo si la falla es nuestra. Al comprar aceptas los{' '}
             <a href="/legal#terminos" className="font-semibold text-brand-secondary hover:underline">
               términos
             </a>

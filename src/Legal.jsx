@@ -55,10 +55,11 @@ const SECTIONS = [
     title: 'Política de reembolsos',
     blocks: [
       {
-        h: 'No hay reembolsos',
+        h: 'Reembolso solo si la falla es nuestra',
         p: [
-          'Todas las compras son finales. Al confirmar tu transferencia activamos tu acceso al momento, por eso no hacemos devoluciones de ningún plan (Básico ni Permanente), ni por acceso no usado, ni por cambio de opinión, ni por una suspensión por incumplir los términos.',
-          'Revisa el plan y el monto antes de transferir. Si tienes un problema con tu acceso o con una descarga, escríbenos por Telegram y lo resolvemos.',
+          'Las compras son finales: no hay reembolso por cambio de opinión, por no usar tu acceso, ni por una suspensión debida a que incumpliste los términos.',
+          'Sí hay reembolso cuando el servicio no funciona por una falla nuestra (por ejemplo, el sistema estuvo caído y no pudiste usar el acceso que pagaste, o se cobró un plan que nunca se activó). Escríbenos a @tostilocos y lo resolvemos.',
+          'Revisa el plan y el monto antes de transferir.',
         ],
       },
     ],
