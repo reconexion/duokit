@@ -1,120 +1,16 @@
 import { Button } from '@/components/base/buttons/button';
+import { LanguageSwitcher } from '@/components/LanguageSwitcher';
+import { useI18n } from './i18n';
 
 const SUPPORT_URL = import.meta.env.VITE_SUPPORT_URL || 'https://t.me/tostilocos';
-const UPDATED = '22 de septiembre de 2026';
 
-// Los precios y límites no se repiten aquí: valen los que se muestran en "Planes" y en el bot al comprar.
-const SECTIONS = [
-  {
-    id: 'terminos',
-    title: 'Términos de uso',
-    blocks: [
-      {
-        h: '1. El servicio',
-        p: [
-          'duokit es una herramienta para descargar de YouTube video, audio (MP3) y miniaturas desde tu navegador. Se contrata en este sitio y se paga con tarjeta a través de Stripe. Al pagar o usar duokit aceptas estos términos.',
-        ],
-      },
-      {
-        h: '2. Planes',
-        p: [
-          'Los precios, la calidad máxima y el número de descargas por día de cada plan son los que aparecen en la sección Planes y en el bot al momento de comprar.',
-          'El plan Básico dura 30 días y no se renueva solo: nunca hacemos cobros automáticos. Para seguir, compras de nuevo y se suman 30 días a tu cuenta.',
-          'El plan Permanente es de pago único y no vence: tu acceso dura mientras duokit siga operando. No es un plazo garantizado; si algún día dejamos de ofrecer el servicio, lo anunciaremos en este sitio.',
-        ],
-      },
-      {
-        h: '3. Tu cuenta',
-        p: [
-          'La cuenta es personal. No la revendas ni compartas tus datos de acceso. Se permiten hasta 2 sesiones abiertas a la vez; al abrir una tercera se cierra la más antigua.',
-          'Hay límites de uso (descargas por minuto y por día, y descargas simultáneas) para que el servicio funcione bien para todos. Los archivos que descargas no se guardan en nuestro servidor: se borran solos pocos minutos después.',
-          'Si superas los límites de forma repetida, automatizas el servicio o lo usas de forma abusiva, podemos suspender tu cuenta. Una suspensión por incumplir estos términos no da derecho a reembolso.',
-        ],
-      },
-      {
-        h: '4. El contenido que descargas',
-        p: [
-          'Eres responsable de lo que descargas y de lo que haces con ello. Descarga solo contenido tuyo o que tengas permiso de usar, y respeta los derechos de autor, la ley aplicable y las condiciones de YouTube.',
-          'duokit no es de YouTube ni de Google, no está afiliado a ellos y no aloja ni distribuye contenido de terceros.',
-        ],
-      },
-      {
-        h: '5. Disponibilidad',
-        p: [
-          'duokit depende de YouTube, que puede cambiar en cualquier momento y dejar de funcionar total o parcialmente algún video o el servicio. Trabajamos para arreglarlo lo antes posible, pero no garantizamos disponibilidad continua ni que todos los videos se puedan descargar. El servicio se ofrece “tal cual”.',
-        ],
-      },
-      {
-        h: '6. Cambios',
-        p: ['Podemos actualizar estos términos. La versión vigente es la de esta página y aplica a las compras y al uso posteriores a su fecha de actualización.'],
-      },
-    ],
-  },
-  {
-    id: 'reembolsos',
-    title: 'Política de reembolsos',
-    blocks: [
-      {
-        h: 'Reembolso solo si la falla es nuestra',
-        p: [
-          'Las compras son finales: no hay reembolso por cambio de opinión, por no usar tu acceso, ni por una suspensión debida a que incumpliste los términos.',
-          'Sí hay reembolso cuando el servicio no funciona por una falla nuestra (por ejemplo, el sistema estuvo caído y no pudiste usar el acceso que pagaste, o se cobró un plan que nunca se activó). Escríbenos a @tostilocos y lo resolvemos.',
-          'Revisa el plan antes de pagar.',
-        ],
-      },
-    ],
-  },
-  {
-    id: 'privacidad',
-    title: 'Aviso de privacidad',
-    blocks: [
-      {
-        h: 'Quién trata tus datos',
-        p: ['duokit es responsable de tus datos personales. Contacto: @tostilocos.'],
-      },
-      {
-        h: 'Qué datos guardamos',
-        p: [
-          'Tu correo y el nombre que das al pagar (Stripe los recoge al cobrar y nos los pasa).',
-          'Los de tu cuenta: usuario (lo generamos nosotros), nombre, plan, fecha de vencimiento y tu contraseña, que se guarda cifrada (nunca en texto claro).',
-          'Los de tus pagos: referencia, plan, monto y fechas. Los datos de tu tarjeta los pide y los procesa Stripe directamente: nosotros nunca los vemos ni los guardamos.',
-          'Los de tu uso: fecha y dirección IP de tus inicios de sesión y de cada descarga, con el enlace del video y la calidad elegida. No guardamos los archivos que descargas.',
-        ],
-      },
-      {
-        h: 'Para qué los usamos',
-        p: [
-          'Para crear y administrar tu cuenta, activar tu acceso cuando pagas, mostrarte tu recibo, aplicar los límites de uso, prevenir abusos y atender tus dudas. No los usamos para publicidad.',
-        ],
-      },
-      {
-        h: 'Con quién los compartimos',
-        p: [
-          'No vendemos tus datos. Los compartimos solo con quien hace falta para operar: Stripe, que procesa tu pago (ellos manejan tu tarjeta y tu correo, con sus propias reglas de privacidad). Los entregaremos si una autoridad competente nos lo exige.',
-        ],
-      },
-      {
-        h: 'Cookies',
-        p: ['Usamos una sola cookie técnica de sesión, necesaria para que puedas entrar y se borra al cerrar el navegador. No usamos cookies de publicidad ni de analítica.'],
-      },
-      {
-        h: 'Cuánto tiempo',
-        p: [
-          'El registro de tu actividad (dirección IP y enlaces de tus descargas) se borra automáticamente a los 90 días.',
-          'Los demás datos los conservamos mientras tu cuenta exista y el tiempo necesario para atender aclaraciones o exigencias legales.',
-        ],
-      },
-      {
-        h: 'Tus derechos',
-        p: [
-          'Puedes pedir acceder a tus datos, corregirlos, cancelarlos u oponerte a su uso (derechos ARCO) escribiendo a @tostilocos. Si cancelamos tus datos, tu cuenta deja de funcionar. Si cambiamos este aviso, lo publicaremos en esta página.',
-        ],
-      },
-    ],
-  },
-];
-
+// Los precios y límites no se repiten aquí: valen los que se muestran en "Planes" y al comprar.
+// El contenido legal (términos, reembolsos, aviso de privacidad) vive en src/locales/es.js y en.js
+// bajo la clave "legal": el inglés es una traducción directa del español, que sigue siendo el texto
+// legal de referencia (así lo pidió el dueño; no se revisó por un abogado en ningún idioma).
 export default function Legal() {
+  const { t } = useI18n();
+  const sections = t('legal.sections');
   return (
     <div className="min-h-screen bg-primary text-primary">
       <header className="border-b border-secondary">
@@ -122,25 +18,28 @@ export default function Legal() {
           <a href="/" className="font-[family-name:var(--font-display)] text-2xl font-bold tracking-tight text-brand-900">
             duokit
           </a>
-          <Button size="sm" color="secondary" href="/">
-            Volver al inicio
-          </Button>
+          <div className="flex items-center gap-2">
+            <LanguageSwitcher />
+            <Button size="sm" color="secondary" href="/">
+              {t('legal.backHome')}
+            </Button>
+          </div>
         </div>
       </header>
 
       <main className="mx-auto max-w-3xl px-4 py-12 sm:px-6 lg:py-16">
-        <h1 className="font-[family-name:var(--font-display)] text-4xl font-bold tracking-tight text-primary sm:text-5xl">Términos, reembolsos y privacidad</h1>
-        <p className="mt-3 text-md text-tertiary">Última actualización: {UPDATED}</p>
+        <h1 className="font-[family-name:var(--font-display)] text-4xl font-bold tracking-tight text-primary sm:text-5xl">{t('legal.title')}</h1>
+        <p className="mt-3 text-md text-tertiary">{t('legal.updated', { date: t('legal.updatedDate') })}</p>
 
-        <nav aria-label="Secciones" className="mt-8 flex flex-wrap gap-x-6 gap-y-2 text-sm font-semibold">
-          {SECTIONS.map(({ id, title }) => (
+        <nav aria-label={t('legal.sectionsLabel')} className="mt-8 flex flex-wrap gap-x-6 gap-y-2 text-sm font-semibold">
+          {sections.map(({ id, title }) => (
             <a key={id} href={`#${id}`} className="text-brand-secondary hover:underline">
               {title}
             </a>
           ))}
         </nav>
 
-        {SECTIONS.map(({ id, title, blocks }) => (
+        {sections.map(({ id, title, blocks }) => (
           <section key={id} id={id} className="mt-14 scroll-mt-8">
             <h2 className="font-[family-name:var(--font-display)] text-2xl font-bold tracking-tight text-primary sm:text-3xl">{title}</h2>
             {blocks.map(({ h, p }) => (
@@ -157,7 +56,7 @@ export default function Legal() {
         ))}
 
         <p className="mt-14 border-t border-secondary pt-6 text-sm text-tertiary">
-          ¿Dudas? Escríbenos a{' '}
+          {t('legal.questionsPrefix')}
           <a href={SUPPORT_URL} target="_blank" rel="noopener noreferrer" className="font-semibold text-brand-secondary hover:underline">
             @tostilocos
           </a>

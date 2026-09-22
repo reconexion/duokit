@@ -1,9 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
 import { apiFetch } from './api';
+import { useI18n } from './i18n';
 
 const POLL_INTERVAL_MS = 1000;
 
 export function useJobPoller() {
+  const { t } = useI18n();
   const [isRunning, setIsRunning] = useState(false);
   const [percent, setPercent] = useState(0);
   const [message, setMessage] = useState('');
@@ -27,12 +29,12 @@ export function useJobPoller() {
     setIsRunning(true);
     setFiles([]);
     setPercent(0);
-    setMessage('Iniciando...');
+    setMessage(t('downloader.starting'));
 
     pollRef.current = setInterval(async () => {
       try {
         const res = await apiFetch(`/api/status/${jobId}`);
-        if (!res.ok) throw new Error('No se pudo obtener el estado.');
+        if (!res.ok) throw new Error(t('downloader.statusError'));
         const data = await res.json();
 
         setPercent(data.percent ?? 0);

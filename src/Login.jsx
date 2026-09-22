@@ -4,13 +4,11 @@ import { AlertCircle, ClockRefresh, Lock01, MusicNote01, Scissors01, User01, Vid
 import { Button } from '@/components/base/buttons/button';
 import { Input } from '@/components/base/input/input';
 import { FeaturedIcon } from '@/components/foundations/featured-icon/featured-icon';
+import { LanguageSwitcher } from '@/components/LanguageSwitcher';
 import { useAuth } from './auth';
+import { useI18n } from './i18n';
 
-const FEATURES = [
-  { icon: VideoRecorder, title: 'Video hasta 4K', detail: 'En MP4, con la calidad que elijas.' },
-  { icon: MusicNote01, title: 'Solo el audio', detail: 'En MP3, de 64 a 320 kbps.' },
-  { icon: Scissors01, title: 'Recorta un fragmento', detail: 'Descarga solo la parte que necesitas.' },
-];
+const FEATURE_ICONS = [VideoRecorder, MusicNote01, Scissors01];
 
 const WELCOME_MS = 1550;
 
@@ -33,6 +31,8 @@ function Notice({ tone, icon, children }) {
 
 // Panel de marca: en escritorio muestra qué hace duokit; en móvil se reduce a una franja.
 function BrandPanel() {
+  const { t } = useI18n();
+  const features = t('login.features');
   return (
     <aside
       className="relative flex flex-col gap-6 overflow-hidden p-6 text-white sm:p-10 md:min-h-[600px] md:pb-44"
@@ -41,27 +41,29 @@ function BrandPanel() {
           'radial-gradient(120% 70% at 0% 0%, rgb(255 255 255 / 0.18), transparent 60%), linear-gradient(160deg, var(--color-brand-700), var(--color-brand-900))',
       }}
     >
-      <span className="font-[family-name:var(--font-display)] text-3xl font-bold tracking-tight">duokit</span>
+      <div className="flex items-center justify-between gap-3">
+        <span className="font-[family-name:var(--font-display)] text-3xl font-bold tracking-tight">duokit</span>
+        <LanguageSwitcher className="bg-white/10" />
+      </div>
 
       <div className="flex flex-col gap-3">
-        <h2 className="font-[family-name:var(--font-display)] text-xl leading-tight font-semibold sm:text-2xl md:text-3xl">
-          Descarga de YouTube sin vueltas.
-        </h2>
-        <p className="hidden max-w-xs text-md text-brand-100 md:block">
-          Pega un enlace y guarda el video, el audio o la miniatura.
-        </p>
+        <h2 className="font-[family-name:var(--font-display)] text-xl leading-tight font-semibold sm:text-2xl md:text-3xl">{t('login.brandTitle')}</h2>
+        <p className="hidden max-w-xs text-md text-brand-100 md:block">{t('login.brandSubtitle')}</p>
       </div>
 
       <ul className="hidden flex-col gap-4 md:flex">
-        {FEATURES.map(({ icon, title, detail }) => (
-          <li key={title} className="flex items-center gap-3">
-            <FeaturedIcon icon={icon} color="brand" theme="light" size="md" className="shrink-0" />
-            <div className="flex flex-col">
-              <span className="text-sm font-semibold">{title}</span>
-              <span className="text-sm text-brand-200">{detail}</span>
-            </div>
-          </li>
-        ))}
+        {features.map(({ title, detail }, index) => {
+          const Icon = FEATURE_ICONS[index];
+          return (
+            <li key={title} className="flex items-center gap-3">
+              <FeaturedIcon icon={Icon} color="brand" theme="light" size="md" className="shrink-0" />
+              <div className="flex flex-col">
+                <span className="text-sm font-semibold">{title}</span>
+                <span className="text-sm text-brand-200">{detail}</span>
+              </div>
+            </li>
+          );
+        })}
       </ul>
 
       {/* El koala vive aquí mientras no hay sesión. */}
@@ -70,7 +72,7 @@ function BrandPanel() {
           directions="/mascots/koala-directions.webp"
           reactions="/mascots/koala-reactions.webp"
           size={170}
-          label="Koala mascota. Sigue tu cursor y reacciona si lo tocas."
+          label={t('login.mascotLabel')}
         />
       </div>
     </aside>
@@ -79,6 +81,7 @@ function BrandPanel() {
 
 // Cubre el formulario cuando el inicio de sesión fue correcto.
 function Welcome({ name }) {
+  const { t } = useI18n();
   const firstName = name.split(/\s+/)[0];
   return (
     <div role="status" aria-live="polite" className="welcome-overlay absolute inset-0 z-10 flex flex-col items-center justify-center gap-6 bg-primary p-6 text-center">
@@ -91,8 +94,8 @@ function Welcome({ name }) {
         </span>
       </div>
       <div className="welcome-text flex flex-col gap-1">
-        <p className="font-[family-name:var(--font-display)] text-3xl font-bold tracking-tight text-primary">¡Hola, {firstName}!</p>
-        <p className="text-md text-tertiary">Sesión iniciada. Entrando a duokit...</p>
+        <p className="font-[family-name:var(--font-display)] text-3xl font-bold tracking-tight text-primary">{t('login.welcomeHello', { name: firstName })}</p>
+        <p className="text-md text-tertiary">{t('login.welcomeEnter')}</p>
       </div>
     </div>
   );
@@ -100,6 +103,7 @@ function Welcome({ name }) {
 
 export default function Login() {
   const { login, setSession, notice } = useAuth();
+  const { t } = useI18n();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [errors, setErrors] = useState({});
@@ -146,8 +150,8 @@ export default function Login() {
     if (locked || isLoading) return;
     setFailure('');
     const next = {};
-    if (!username.trim()) next.username = 'Escribe tu usuario.';
-    if (!password) next.password = 'Escribe tu contraseña.';
+    if (!username.trim()) next.username = t('login.usernameRequired');
+    if (!password) next.password = t('login.passwordRequired');
     setErrors(next);
     if (Object.keys(next).length > 0) {
       shake();
@@ -166,7 +170,7 @@ export default function Login() {
       } else {
         setFailure(err.message);
         setFailureTone(err.code ? 'warning' : 'error'); // con código: acceso vencido o cuenta bloqueada
-        setFocusTick((t) => t + 1);
+        setFocusTick((tick) => tick + 1);
       }
     }
   };
@@ -181,18 +185,22 @@ export default function Login() {
 
       <div className="relative flex flex-col justify-center gap-8 p-6 sm:p-10">
         {welcome && <Welcome name={welcome.name} />}
+        <div className="flex items-center justify-between gap-3 md:hidden">
+          <span />
+          <LanguageSwitcher />
+        </div>
         <header className="flex flex-col gap-4">
           <FeaturedIcon icon={Lock01} theme="modern" color="brand" size="lg" />
           <div className="flex flex-col gap-1.5">
-            <h1 className="font-[family-name:var(--font-display)] text-3xl font-bold tracking-tight text-primary">Inicia sesión</h1>
-            <p className="text-md text-tertiary">Bienvenido de vuelta. Ingresa tus datos para continuar.</p>
+            <h1 className="font-[family-name:var(--font-display)] text-3xl font-bold tracking-tight text-primary">{t('login.heading')}</h1>
+            <p className="text-md text-tertiary">{t('login.subheading')}</p>
           </div>
         </header>
 
         <form onSubmit={handleSubmit} noValidate className="flex flex-col gap-6">
           <div className={`flex flex-col gap-5 ${shaking ? 'animate-shake' : ''}`} onAnimationEnd={() => setShaking(false)}>
             <Input
-              label="Usuario"
+              label={t('login.username')}
               type="text"
               name="username"
               autoComplete="username"
@@ -201,7 +209,7 @@ export default function Login() {
               spellCheck={false}
               autoFocus
               icon={User01}
-              placeholder="Tu usuario"
+              placeholder={t('login.usernamePlaceholder')}
               size="md"
               value={username}
               onChange={(v) => {
@@ -215,11 +223,11 @@ export default function Login() {
             <div onKeyDown={trackCapsLock} onKeyUp={trackCapsLock} onBlur={() => setCapsLock(false)}>
               <Input
                 ref={passwordRef}
-                label="Contraseña"
+                label={t('login.password')}
                 type="password"
                 name="password"
                 autoComplete="current-password"
-                placeholder="Tu contraseña"
+                placeholder={t('login.passwordPlaceholder')}
                 size="md"
                 value={password}
                 onChange={(v) => {
@@ -227,7 +235,7 @@ export default function Login() {
                   setErrors((prev) => ({ ...prev, password: undefined }));
                 }}
                 isInvalid={Boolean(errors.password)}
-                hint={errors.password || (capsLock ? 'Bloq Mayús está activado.' : undefined)}
+                hint={errors.password || (capsLock ? t('login.capsLockOn') : undefined)}
                 isDisabled={isLoading}
               />
             </div>
@@ -235,7 +243,7 @@ export default function Login() {
 
           {locked && (
             <Notice tone="warning" icon={ClockRefresh}>
-              Demasiados intentos. Vuelve a intentarlo en {clock(lockSeconds)}.
+              {t('login.tooManyAttempts', { time: clock(lockSeconds) })}
             </Notice>
           )}
           {!locked && failure && (
@@ -250,14 +258,14 @@ export default function Login() {
           )}
 
           <Button type="submit" size="xl" color="primary" className="w-full" isLoading={isLoading} isDisabled={isLoading || locked} showTextWhileLoading>
-            {isLoading ? 'Entrando...' : locked ? `Disponible en ${clock(lockSeconds)}` : 'Iniciar sesión'}
+            {isLoading ? t('login.submitLoading') : locked ? t('login.submitLocked', { time: clock(lockSeconds) }) : t('login.submit')}
           </Button>
         </form>
 
         <p className="text-sm text-tertiary">
-          ¿No tienes cuenta?{' '}
+          {t('login.noAccountPrefix')}
           <a href="/#planes" className="font-semibold text-brand-secondary hover:underline">
-            Compra tu acceso aquí
+            {t('login.noAccountLink')}
           </a>
           .
         </p>

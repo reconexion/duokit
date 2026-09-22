@@ -5,8 +5,10 @@ import { useState } from 'react';
 import { AlertCircle, Copy01, Eye, EyeOff, RefreshCw02 } from '@untitledui/icons';
 import { Button } from '@/components/base/buttons/button';
 import { apiFetch } from './api';
+import { useI18n } from './i18n';
 
 function MaskedPassword({ password }) {
+  const { t } = useI18n();
   const [visible, setVisible] = useState(false);
   const [copied, setCopied] = useState(false);
   const copy = async () => {
@@ -23,31 +25,32 @@ function MaskedPassword({ password }) {
       <code className={`min-w-0 flex-1 truncate text-md font-semibold text-primary ${visible ? '' : 'blur-sm select-none'}`} aria-hidden={!visible}>
         {password}
       </code>
-      <button type="button" onClick={() => setVisible((v) => !v)} className="shrink-0 text-fg-quaternary transition hover:text-fg-secondary" aria-label={visible ? 'Ocultar contraseña' : 'Mostrar contraseña'}>
+      <button type="button" onClick={() => setVisible((v) => !v)} className="shrink-0 text-fg-quaternary transition hover:text-fg-secondary" aria-label={visible ? t('account.hide') : t('account.show')}>
         {visible ? <EyeOff className="size-5" /> : <Eye className="size-5" />}
       </button>
-      <button type="button" onClick={copy} className="shrink-0 text-fg-quaternary transition hover:text-fg-secondary" aria-label="Copiar contraseña">
+      <button type="button" onClick={copy} className="shrink-0 text-fg-quaternary transition hover:text-fg-secondary" aria-label={t('account.copy')}>
         <Copy01 className="size-5" />
       </button>
-      {copied && <span className="shrink-0 text-xs font-semibold text-success-primary">Copiada</span>}
+      {copied && <span className="shrink-0 text-xs font-semibold text-success-primary">{t('account.copied')}</span>}
     </div>
   );
 }
 
 export default function AccountPanel({ user }) {
+  const { t } = useI18n();
   const [password, setPassword] = useState(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
 
   const regenerate = async () => {
     if (busy) return;
-    if (password && !window.confirm('Se cerrarán tus otras sesiones abiertas (no esta). ¿Generar una contraseña nueva?')) return;
+    if (password && !window.confirm(t('account.confirmRegenerate'))) return;
     setBusy(true);
     setError(null);
     try {
       const res = await apiFetch('/api/account/reset-password', { method: 'POST' });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'No se pudo generar la contraseña.');
+      if (!res.ok) throw new Error(data.error || t('account.regenerateError'));
       setPassword(data.password);
     } catch (err) {
       setError(err.message);
@@ -59,22 +62,22 @@ export default function AccountPanel({ user }) {
   return (
     <div className="flex w-full flex-col gap-4 rounded-2xl bg-secondary p-5 ring-1 ring-secondary ring-inset">
       <div className="flex flex-col gap-1">
-        <span className="text-xs font-semibold tracking-wide text-tertiary uppercase">Usuario</span>
+        <span className="text-xs font-semibold tracking-wide text-tertiary uppercase">{t('account.username')}</span>
         <span className="text-md font-semibold text-primary">{user.username}</span>
       </div>
       <div className="flex flex-col gap-1">
-        <span className="text-xs font-semibold tracking-wide text-tertiary uppercase">Nombre</span>
+        <span className="text-xs font-semibold tracking-wide text-tertiary uppercase">{t('account.name')}</span>
         <span className="text-md font-semibold text-primary">{user.name}</span>
       </div>
       <div className="flex flex-col gap-2">
-        <span className="text-xs font-semibold tracking-wide text-tertiary uppercase">Contraseña</span>
+        <span className="text-xs font-semibold tracking-wide text-tertiary uppercase">{t('account.password')}</span>
         {password ? (
           <MaskedPassword password={password} />
         ) : (
-          <p className="text-sm text-tertiary">Por seguridad no se muestra. Genera una nueva si la necesitas.</p>
+          <p className="text-sm text-tertiary">{t('account.hiddenNotice')}</p>
         )}
         <Button size="sm" color="secondary" iconLeading={RefreshCw02} isLoading={busy} onPress={regenerate} className="self-start">
-          Generar contraseña nueva
+          {t('account.regenerate')}
         </Button>
         {error && (
           <p role="alert" className="flex items-center gap-1.5 text-sm text-error-primary">

@@ -1,9 +1,11 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { UNAUTHORIZED_EVENT } from './api';
+import { useI18n } from './i18n';
 
 const AuthContext = createContext(null);
 
 export function AuthProvider({ children }) {
+  const { t } = useI18n();
   const [status, setStatus] = useState('loading'); // 'loading' | 'ready'
   const [user, setUser] = useState(null);
   const [notice, setNotice] = useState(null); // { message, tone } que se muestra en el login
@@ -36,7 +38,7 @@ export function AuthProvider({ children }) {
           setNotice(
             detail.code
               ? { message: detail.error, tone: 'warning' }
-              : { message: 'Tu sesión terminó. Inicia sesión de nuevo para continuar.', tone: 'info' },
+              : { message: t('login.sessionEnded'), tone: 'info' },
           );
         }
         return null;
@@ -44,7 +46,7 @@ export function AuthProvider({ children }) {
     };
     window.addEventListener(UNAUTHORIZED_EVENT, onUnauthorized);
     return () => window.removeEventListener(UNAUTHORIZED_EVENT, onUnauthorized);
-  }, []);
+  }, [t]);
 
   const login = useCallback(async ({ username, password }) => {
     let res;
@@ -56,17 +58,17 @@ export function AuthProvider({ children }) {
         body: JSON.stringify({ username, password }),
       });
     } catch {
-      throw new Error('No pude conectar con el servidor. Revisa que esté encendido.');
+      throw new Error(t('login.connectionError'));
     }
     const data = await res.json().catch(() => ({}));
     if (!res.ok) {
-      const err = new Error(data.error || 'No se pudo iniciar sesión.');
+      const err = new Error(data.error || t('login.genericError'));
       err.retryAfter = data.retryAfter; // segundos de bloqueo (429)
       err.code = data.code; // p. ej. 'access_expired'
       throw err;
     }
     return data.user; // la app abre la sesión con setSession() cuando termina la animación
-  }, []);
+  }, [t]);
 
   const setSession = useCallback((nextUser) => {
     setNotice(null);

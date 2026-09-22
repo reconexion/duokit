@@ -4,63 +4,27 @@ import { AlertCircle, Check, ChevronDown, CreditCard01, CursorClick01, Download0
 import { Badge } from '@/components/base/badges/badges';
 import { Button } from '@/components/base/buttons/button';
 import { FeaturedIcon } from '@/components/foundations/featured-icon/featured-icon';
+import { LanguageSwitcher } from '@/components/LanguageSwitcher';
 import { cx } from '@/utils/cx';
+import { useI18n } from './i18n';
 
 const SUPPORT_URL = import.meta.env.VITE_SUPPORT_URL || 'https://t.me/tostilocos';
 
-const FEATURES = [
-  { icon: VideoRecorder, title: 'Video hasta 4K', text: 'Elige la calidad, desde 480p. El 4K llega con el plan Permanente.' },
-  { icon: MusicNote01, title: 'Solo el audio', text: 'Guarda la canción o el podcast en MP3, de 64 a 320 kbps.' },
-  { icon: Scissors01, title: 'Recorta lo que necesitas', text: 'Descarga solo un fragmento, con minuto y segundo de inicio y fin.' },
-  { icon: Globe01, title: 'Elige el doblaje', text: 'Si el video tiene varios idiomas de audio, escoges cuál bajar.' },
-];
-
-const STEPS = [
-  { icon: CursorClick01, title: 'Elige tu plan', text: 'Básico o Permanente, aquí mismo.' },
-  { icon: CreditCard01, title: 'Paga con tarjeta', text: 'Un checkout seguro de Stripe. duokit nunca ve tu tarjeta.' },
-  { icon: Key01, title: 'Entra y descarga', text: 'En cuanto Stripe confirma el cobro, tu cuenta ya está lista, ahí mismo en la pantalla.' },
-];
-
-const PLANS = [
-  {
-    id: 'basic',
-    name: 'Básico',
-    price: '$129',
-    unit: 'MXN al mes',
-    blurb: 'Para descargar cuando lo necesitas.',
-    features: ['30 días de acceso', 'Video hasta 1080p', 'Hasta 30 descargas al día', 'Audio MP3 y miniaturas', 'Recorte de fragmentos'],
-  },
-  {
-    id: 'lifetime',
-    name: 'Permanente',
-    price: '$2,999',
-    unit: 'MXN, pago único',
-    blurb: 'Págalo una vez y olvídate de renovar.',
-    highlight: true,
-    features: ['Acceso de por vida', 'Video hasta 4K', 'Hasta 150 descargas al día', 'Todo lo del plan Básico', 'Sin renovaciones'],
-  },
-];
-
-const FAQ = [
-  { q: '¿Cómo pago?', a: 'Con tarjeta, por un checkout seguro de Stripe. Elige tu plan, paga, y tu cuenta queda lista en la misma pantalla.' },
-  { q: '¿Cuánto tarda en activarse mi cuenta?', a: 'Segundos: en cuanto Stripe confirma el cobro, ves tu usuario y contraseña ahí mismo, sin que nadie confirme nada a mano.' },
-  { q: '¿Puedo entrar desde varios dispositivos?', a: 'Sí, hasta 2 sesiones abiertas a la vez con la misma cuenta. Si abres una tercera, se cierra la más antigua.' },
-  { q: '¿Hay reembolsos?', a: 'Las compras son finales: no hay reembolso por cambio de opinión ni por no usar tu acceso. Sí hay reembolso si el servicio falla por nuestra culpa (por ejemplo, se cae el sistema). Escríbenos y lo resolvemos.' },
-  { q: '¿Qué pasa cuando vence el plan Básico?', a: 'Tu acceso termina en la fecha indicada. Para seguir, compra de nuevo con el mismo correo: la renovación suma 30 días a tu cuenta.' },
-  { q: '¿Y si olvido mi contraseña?', a: 'Si sigues con la sesión abierta en algún dispositivo, genera una nueva desde tu cuenta. Si no, escríbenos y te ayudamos.' },
-];
+const FEATURE_ICONS = [VideoRecorder, MusicNote01, Scissors01, Globe01];
+const STEP_ICONS = [CursorClick01, CreditCard01, Key01];
 
 // Vista previa de la app (solo decorativa).
 function AppPreview() {
+  const { t } = useI18n();
   const tiles = [
-    { icon: VideoRecorder, title: 'Video', detail: 'MP4', on: true },
-    { icon: MusicNote01, title: 'Audio', detail: 'MP3' },
-    { icon: Download01, title: 'Miniatura', detail: 'JPG' },
+    { icon: VideoRecorder, title: t('hero.previewVideo'), detail: 'MP4', on: true },
+    { icon: MusicNote01, title: t('hero.previewAudio'), detail: 'MP3' },
+    { icon: Download01, title: t('hero.previewThumbnail'), detail: 'JPG' },
   ];
   return (
     <div aria-hidden="true" className="pointer-events-none flex w-full max-w-md select-none flex-col gap-5 rounded-2xl bg-primary p-6 shadow-2xl shadow-brand-600/15 ring-1 ring-brand-200">
       <div className="flex flex-col gap-2">
-        <span className="text-sm font-semibold text-secondary">Enlace del video</span>
+        <span className="text-sm font-semibold text-secondary">{t('hero.previewLinkLabel')}</span>
         <div className="flex items-center gap-2 rounded-lg bg-primary px-3 py-2.5 text-md text-tertiary shadow-xs ring-1 ring-primary ring-inset">
           <Link01 className="size-5 text-fg-quaternary" />
           youtube.com/watch?v=...
@@ -81,7 +45,7 @@ function AppPreview() {
       </div>
       <div className="flex items-center justify-center gap-2 rounded-lg bg-brand-solid px-4 py-3 text-md font-semibold text-white">
         <Download01 className="size-5" />
-        Descargar
+        {t('hero.previewDownload')}
       </div>
     </div>
   );
@@ -97,6 +61,7 @@ function SectionHeading({ title, text }) {
 }
 
 function PlanCard({ plan, canBuy, isLoading, onBuy }) {
+  const { t } = useI18n();
   return (
     <div
       className={cx(
@@ -107,7 +72,7 @@ function PlanCard({ plan, canBuy, isLoading, onBuy }) {
       {plan.highlight && (
         <div className="absolute -top-3 left-8">
           <Badge size="md" color="brand">
-            Mejor valor
+            {t('plans.bestValue')}
           </Badge>
         </div>
       )}
@@ -138,16 +103,27 @@ function PlanCard({ plan, canBuy, isLoading, onBuy }) {
         isLoading={isLoading}
         onPress={onBuy}
       >
-        Comprar {plan.name}
+        {t('plans.buyPlan', { name: plan.name })}
       </Button>
     </div>
   );
 }
 
 export default function Landing() {
+  const { t } = useI18n();
   const [acceptedTerms, setAcceptedTerms] = useState(false);
   const [loadingPlan, setLoadingPlan] = useState(null);
   const [error, setError] = useState(null);
+
+  const features = t('features.items');
+  const steps = t('steps.items');
+  const faq = t('faq.items');
+  const basicPlan = t('plans.basic');
+  const lifetimePlan = t('plans.lifetime');
+  const plans = [
+    { id: 'basic', price: '$129', ...basicPlan },
+    { id: 'lifetime', price: '$2,999', highlight: true, ...lifetimePlan },
+  ];
 
   const buy = async (planId) => {
     setError(null);
@@ -160,7 +136,7 @@ export default function Landing() {
         body: JSON.stringify({ plan: planId, acceptedTerms: true }),
       });
       const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data.error || 'No se pudo iniciar el pago.');
+      if (!res.ok) throw new Error(data.error || t('plans.checkoutError'));
       window.location.href = data.url; // a partir de aquí, Stripe: pide correo, nombre y tarjeta
     } catch (err) {
       setError(err.message);
@@ -176,17 +152,18 @@ export default function Landing() {
           <a href="/" className="font-[family-name:var(--font-display)] text-2xl font-bold tracking-tight text-brand-900">
             duokit
           </a>
-          <nav className="hidden items-center gap-8 text-sm font-semibold text-tertiary md:flex" aria-label="Secciones">
-            <a href="#como-funciona" className="transition hover:text-primary">Cómo funciona</a>
-            <a href="#planes" className="transition hover:text-primary">Planes</a>
-            <a href="#preguntas" className="transition hover:text-primary">Preguntas</a>
+          <nav className="hidden items-center gap-8 text-sm font-semibold text-tertiary md:flex" aria-label={t('legal.sectionsLabel')}>
+            <a href="#como-funciona" className="transition hover:text-primary">{t('nav.howItWorks')}</a>
+            <a href="#planes" className="transition hover:text-primary">{t('nav.plans')}</a>
+            <a href="#preguntas" className="transition hover:text-primary">{t('nav.faq')}</a>
           </nav>
           <div className="flex items-center gap-2">
+            <LanguageSwitcher />
             <Button size="sm" color="secondary" href="/app">
-              Entrar
+              {t('nav.login')}
             </Button>
             <Button size="sm" color="primary" iconLeading={CreditCard01} className="hidden sm:inline-flex" href="#planes">
-              Comprar
+              {t('nav.buy')}
             </Button>
           </div>
         </div>
@@ -203,23 +180,21 @@ export default function Landing() {
           <div className="mx-auto grid max-w-6xl items-center gap-12 px-4 py-16 sm:px-6 lg:grid-cols-[1.1fr_1fr] lg:py-24">
             <div className="flex flex-col items-start gap-6">
               <Badge size="lg" color="brand">
-                Descargador de YouTube
+                {t('hero.badge')}
               </Badge>
               <h1 className="font-[family-name:var(--font-display)] text-5xl leading-[1.05] font-bold tracking-tight text-primary sm:text-6xl">
-                Descarga de YouTube <span className="text-brand-secondary">sin vueltas.</span>
+                {t('hero.titlePre')}<span className="text-brand-secondary">{t('hero.titleHighlight')}</span>
               </h1>
-              <p className="max-w-xl text-lg text-tertiary sm:text-xl">
-                Pega el enlace, elige video, audio o miniatura y tu navegador lo guarda. Sin instalar nada, sin anuncios y con recorte de fragmentos incluido.
-              </p>
+              <p className="max-w-xl text-lg text-tertiary sm:text-xl">{t('hero.subtitle')}</p>
               <div className="flex flex-col gap-3 sm:flex-row">
                 <Button size="xl" color="primary" iconLeading={CreditCard01} href="#planes">
-                  Comprar
+                  {t('hero.buy')}
                 </Button>
                 <Button size="xl" color="secondary" href="/app">
-                  Ya tengo cuenta
+                  {t('hero.haveAccount')}
                 </Button>
               </div>
-              <p className="text-sm text-tertiary">Pagas con tarjeta (Stripe) y tu cuenta queda lista al momento, automático.</p>
+              <p className="text-sm text-tertiary">{t('hero.payNote')}</p>
             </div>
 
             <div className="relative flex justify-center lg:justify-end">
@@ -229,7 +204,7 @@ export default function Landing() {
                   directions="/mascots/koala-directions.webp"
                   reactions="/mascots/koala-reactions.webp"
                   size={150}
-                  label="Koala mascota. Sigue tu cursor y reacciona si lo tocas."
+                  label={t('hero.mascotLabel')}
                 />
               </div>
             </div>
@@ -238,11 +213,11 @@ export default function Landing() {
 
         {/* Qué incluye */}
         <section className="mx-auto max-w-6xl px-4 py-16 sm:px-6 lg:py-24">
-          <SectionHeading title="Todo lo que necesitas para guardar un video" text="Una sola pantalla, sin configuraciones raras." />
+          <SectionHeading title={t('features.heading')} text={t('features.subheading')} />
           <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
-            {FEATURES.map(({ icon, title, text }) => (
+            {features.map(({ title, text }, index) => (
               <div key={title} className="flex flex-col gap-4 rounded-2xl bg-primary p-6 shadow-xs ring-1 ring-secondary ring-inset">
-                <FeaturedIcon icon={icon} theme="light" color="brand" size="lg" />
+                <FeaturedIcon icon={FEATURE_ICONS[index]} theme="light" color="brand" size="lg" />
                 <div className="flex flex-col gap-1.5">
                   <h3 className="text-lg font-semibold text-primary">{title}</h3>
                   <p className="text-md text-tertiary">{text}</p>
@@ -255,12 +230,12 @@ export default function Landing() {
         {/* Cómo funciona */}
         <section id="como-funciona" className="scroll-mt-16 bg-secondary py-16 lg:py-24">
           <div className="mx-auto max-w-6xl px-4 sm:px-6">
-            <SectionHeading title="Empieza en tres pasos" text="Sin bot, sin esperar a nadie: todo aquí mismo." />
+            <SectionHeading title={t('steps.heading')} text={t('steps.subheading')} />
             <ol className="grid gap-8 md:grid-cols-3">
-              {STEPS.map(({ icon, title, text }, index) => (
+              {steps.map(({ title, text }, index) => (
                 <li key={title} className="flex flex-col items-center gap-4 text-center">
                   <div className="relative">
-                    <FeaturedIcon icon={icon} theme="modern" color="brand" size="xl" />
+                    <FeaturedIcon icon={STEP_ICONS[index]} theme="modern" color="brand" size="xl" />
                     <span className="absolute -top-2 -right-2 flex size-7 items-center justify-center rounded-full bg-brand-solid text-sm font-bold text-white ring-4 ring-bg-secondary">
                       {index + 1}
                     </span>
@@ -275,7 +250,7 @@ export default function Landing() {
 
         {/* Planes */}
         <section id="planes" className="mx-auto max-w-4xl scroll-mt-16 px-4 py-16 sm:px-6 lg:py-24">
-          <SectionHeading title="Elige tu plan" text="Precios en pesos mexicanos. Sin letra chiquita." />
+          <SectionHeading title={t('plans.heading')} text={t('plans.subheading')} />
 
           <label className="mx-auto mb-8 flex max-w-lg cursor-pointer items-start gap-3 rounded-xl bg-secondary p-4 text-sm text-secondary ring-1 ring-secondary ring-inset">
             <input
@@ -285,20 +260,20 @@ export default function Landing() {
               className="mt-0.5 size-4 shrink-0 accent-[var(--color-brand-solid)]"
             />
             <span>
-              He leído y acepto los{' '}
+              {t('plans.termsPrefix')}
               <a href="/legal#terminos" target="_blank" rel="noopener noreferrer" className="font-semibold text-brand-secondary hover:underline">
-                términos de uso
-              </a>{' '}
-              y la{' '}
+                {t('plans.termsLink')}
+              </a>
+              {t('plans.termsMiddle')}
               <a href="/legal#reembolsos" target="_blank" rel="noopener noreferrer" className="font-semibold text-brand-secondary hover:underline">
-                política de reembolsos
-              </a>{' '}
-              (compras finales; reembolso solo si la falla es nuestra).
+                {t('plans.refundsLink')}
+              </a>
+              {t('plans.termsSuffix')}
             </span>
           </label>
 
           <div className="grid gap-8 md:grid-cols-2">
-            {PLANS.map((plan) => (
+            {plans.map((plan) => (
               <PlanCard key={plan.id} plan={plan} canBuy={acceptedTerms} isLoading={loadingPlan === plan.id} onBuy={() => buy(plan.id)} />
             ))}
           </div>
@@ -313,9 +288,9 @@ export default function Landing() {
 
         {/* Preguntas */}
         <section id="preguntas" className="mx-auto max-w-3xl scroll-mt-16 px-4 pb-16 sm:px-6 lg:pb-24">
-          <SectionHeading title="Preguntas frecuentes" />
+          <SectionHeading title={t('faq.heading')} />
           <div className="flex flex-col divide-y divide-[var(--color-border-secondary)] rounded-2xl ring-1 ring-secondary ring-inset">
-            {FAQ.map(({ q, a }) => (
+            {faq.map(({ q, a }) => (
               <details key={q} className="group px-6 py-5">
                 <summary className="flex cursor-pointer list-none items-center justify-between gap-4 text-md font-semibold text-primary">
                   {q}
@@ -333,10 +308,10 @@ export default function Landing() {
             className="flex flex-col items-center gap-6 rounded-3xl px-6 py-14 text-center text-white"
             style={{ backgroundImage: 'radial-gradient(120% 90% at 0% 0%, rgb(255 255 255 / 0.18), transparent 60%), linear-gradient(160deg, var(--color-brand-700), var(--color-brand-900))' }}
           >
-            <h2 className="max-w-xl font-[family-name:var(--font-display)] text-3xl font-bold tracking-tight sm:text-4xl">¿Listo para descargar sin vueltas?</h2>
-            <p className="max-w-md text-lg text-brand-100">Elige tu plan, paga con tarjeta y en segundos ya estás dentro.</p>
+            <h2 className="max-w-xl font-[family-name:var(--font-display)] text-3xl font-bold tracking-tight sm:text-4xl">{t('finalCta.heading')}</h2>
+            <p className="max-w-md text-lg text-brand-100">{t('finalCta.subheading')}</p>
             <Button size="xl" color="secondary" iconLeading={CreditCard01} href="#planes">
-              Comprar
+              {t('finalCta.buy')}
             </Button>
           </div>
         </section>
@@ -345,18 +320,18 @@ export default function Landing() {
       <footer className="border-t border-secondary">
         <div className="mx-auto flex max-w-6xl flex-col gap-3 px-4 py-8 text-sm text-tertiary sm:flex-row sm:items-center sm:justify-between sm:px-6">
           <p>
-            © {new Date().getFullYear()} duokit · Contacto:{' '}
+            © {new Date().getFullYear()} duokit · {t('footer.contact')}:{' '}
             <a href={SUPPORT_URL} target="_blank" rel="noopener noreferrer" className="font-semibold text-brand-secondary hover:underline">
               @tostilocos
             </a>
           </p>
           <div className="flex max-w-md flex-col gap-2 sm:items-end sm:text-right">
             <p className="flex gap-4 font-semibold text-brand-secondary">
-              <a href="/legal#terminos" className="hover:underline">Términos</a>
-              <a href="/legal#reembolsos" className="hover:underline">Reembolsos</a>
-              <a href="/legal#privacidad" className="hover:underline">Privacidad</a>
+              <a href="/legal#terminos" className="hover:underline">{t('footer.terms')}</a>
+              <a href="/legal#reembolsos" className="hover:underline">{t('footer.refunds')}</a>
+              <a href="/legal#privacidad" className="hover:underline">{t('footer.privacy')}</a>
             </p>
-            <p>Descarga solo contenido tuyo o que tengas permiso de usar. duokit no está afiliado a YouTube.</p>
+            <p>{t('footer.disclaimer')}</p>
           </div>
         </div>
       </footer>

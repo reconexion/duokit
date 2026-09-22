@@ -4,6 +4,7 @@ import { LogOut01, User01 } from '@untitledui/icons';
 import { Avatar } from '@/components/base/avatar/avatar';
 import { Badge } from '@/components/base/badges/badges';
 import { Button } from '@/components/base/buttons/button';
+import { LanguageSwitcher } from '@/components/LanguageSwitcher';
 import AccountPanel from './AccountPanel';
 import Admin from './Admin';
 import Landing from './Landing';
@@ -14,6 +15,7 @@ import Downloader from './Downloader';
 import Login from './Login';
 import { accessInfo } from './access';
 import { AuthProvider, useAuth } from './auth';
+import { useI18n } from './i18n';
 import { currentRoute } from './route';
 
 const initialsOf = (name = '') =>
@@ -26,12 +28,14 @@ const initialsOf = (name = '') =>
 
 function UserBar({ showAccount, onToggleAccount }) {
   const { user, logout } = useAuth();
+  const { t } = useI18n();
   // Sin fecha de vencimiento (plan Permanente o administrador) se muestra "Acceso permanente".
   const access = user.expiresAt
-    ? accessInfo(user.expiresAt)
-    : { label: user.role === 'admin' ? 'Administrador' : 'Acceso permanente', tone: 'brand', title: 'Tu acceso a duokit no vence.' };
+    ? accessInfo(user.expiresAt, t)
+    : { label: user.role === 'admin' ? t('app.admin') : t('app.lifetimeAccess'), tone: 'brand', title: t('app.lifetimeTitle') };
   return (
     <div className="mb-8 flex w-full flex-wrap items-center justify-end gap-x-3 gap-y-2">
+      <LanguageSwitcher className="mr-auto" />
       <span title={access.title}>
         <Badge size="md" color={access.tone}>
           {access.label}
@@ -51,14 +55,14 @@ function UserBar({ showAccount, onToggleAccount }) {
       </button>
       {user.role === 'admin' && (
         <Button size="sm" color="tertiary" href="/admin">
-          Panel
+          {t('app.panel')}
         </Button>
       )}
       <Button size="sm" color="secondary" iconLeading={User01} onPress={onToggleAccount}>
-        Mi cuenta
+        {t('app.myAccount')}
       </Button>
       <Button size="sm" color="secondary" iconLeading={LogOut01} onPress={logout}>
-        Cerrar sesión
+        {t('app.logout')}
       </Button>
     </div>
   );
@@ -66,6 +70,7 @@ function UserBar({ showAccount, onToggleAccount }) {
 
 function Home() {
   const { user } = useAuth();
+  const { t } = useI18n();
   const [showAccount, setShowAccount] = useState(false);
   const firstName = user.name.split(/\s+/)[0];
   return (
@@ -78,9 +83,7 @@ function Home() {
       )}
       <header className="mb-8 flex flex-col items-center text-center">
         <h1 className="font-[family-name:var(--font-display)] text-5xl font-bold tracking-tight text-brand-900 sm:text-6xl">duokit</h1>
-        <p className="mt-3 max-w-md text-md text-tertiary">
-          Hola, {firstName}. Descarga videos, audio y miniaturas de YouTube: pega el enlace y elige qué guardar.
-        </p>
+        <p className="mt-3 max-w-md text-md text-tertiary">{t('app.greeting', { name: firstName })}</p>
       </header>
       <Downloader />
     </div>
@@ -89,7 +92,8 @@ function Home() {
 
 function Content() {
   const { status, user } = useAuth();
-  if (status === 'loading') return <p className="mt-32 text-sm text-tertiary">Cargando...</p>;
+  const { t } = useI18n();
+  if (status === 'loading') return <p className="mt-32 text-sm text-tertiary">{t('common.loading')}</p>;
   if (!user) {
     return (
       <div className="my-auto w-full max-w-4xl py-6">
@@ -103,6 +107,7 @@ function Content() {
 // Con sesión iniciada el koala asoma desde la esquina (solo cuando hay espacio a los lados de la tarjeta).
 function CornerMascot() {
   const { user } = useAuth();
+  const { t } = useI18n();
   if (!user) return null;
   return (
     <div className="pointer-events-none fixed right-6 bottom-0 z-20 hidden translate-y-[14%] lg:block">
@@ -111,7 +116,7 @@ function CornerMascot() {
           directions="/mascots/koala-directions.webp"
           reactions="/mascots/koala-reactions.webp"
           size={160}
-          label="Koala mascota. Sigue tu cursor y reacciona si lo tocas."
+          label={t('app.mascotLabel')}
         />
       </div>
     </div>
