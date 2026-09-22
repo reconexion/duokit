@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { AlertCircle, BarChart01, CheckCircle, Clock, CurrencyDollarCircle, LogOut01, RefreshCw01, SearchLg, Users01 } from '@untitledui/icons';
+import { AlertCircle, AlertTriangle, BarChart01, CheckCircle, Clock, CurrencyDollarCircle, Key01, LogOut01, RefreshCw01, SearchLg, Users01 } from '@untitledui/icons';
 import { Badge } from '@/components/base/badges/badges';
 import { Button } from '@/components/base/buttons/button';
 import { Input } from '@/components/base/input/input';
@@ -100,20 +100,6 @@ function Dashboard() {
     }
   };
 
-  const confirmPayment = (p) => {
-    if (!window.confirm(`¿Confirmar ${p.reference} por ${formatMoney(p.amount)}?\n\nSe activará la cuenta y se le avisará al cliente por Telegram.`)) return;
-    run(p.reference, async () => {
-      const r = await adminRequest(`/payments/${p.reference}/confirm`, { method: 'POST', body: '{}' });
-      setNotice({
-        tone: r.delivered ? 'success' : 'warning',
-        text: r.delivered
-          ? `${r.reference} confirmado. ${r.created ? `Se creó el usuario ${r.username}` : `Se actualizó el acceso de ${r.username}`} y el cliente ya recibió sus datos por Telegram.`
-          : `${r.reference} confirmado, pero no pude escribirle al cliente por Telegram. Dale sus datos por otro medio.`,
-        credentials: r.credentials,
-      });
-    });
-  };
-
   const cancelPayment = (p) => {
     if (!window.confirm(`¿Cancelar la referencia ${p.reference}? El cliente tendrá que pedir otra.`)) return;
     run(p.reference, async () => {
@@ -131,10 +117,20 @@ function Dashboard() {
     });
   };
 
+  // Para cuando alguien perdió su acceso y ya no tiene ninguna sesión abierta (así que no puede generarse una
+  // contraseña él mismo desde "Mi cuenta"). Se la das tú, por el medio que te haya contactado.
+  const resetPassword = (u) => {
+    if (!window.confirm(`¿Generar una contraseña nueva para ${u.username}? Se cerrarán sus sesiones abiertas.`)) return;
+    run(u.id, async () => {
+      const result = await adminRequest(`/users/${u.id}/reset-password`, { method: 'POST', body: '{}' });
+      setNotice({ tone: 'success', text: `Contraseña nueva generada para ${result.username}. Dásela por el medio que te contactó.`, credentials: result });
+    });
+  };
+
   const users = useMemo(() => {
     const q = query.trim().toLowerCase();
     if (!data) return [];
-    return data.users.filter((u) => !q || [u.username, u.name, u.telegramUsername].some((v) => v?.toLowerCase().includes(q)));
+    return data.users.filter((u) => !q || [u.username, u.name, u.email].some((v) => v?.toLowerCase().includes(q)));
   }, [data, query]);
 
   const stats = data?.stats;
@@ -171,6 +167,16 @@ function Dashboard() {
           </div>
         )}
 
+        {data?.serviceAlert && (
+          <div role="alert" className="flex items-start gap-3 rounded-xl bg-warning-primary p-4 text-sm text-secondary ring-1 ring-amber-200 ring-inset">
+            <FeaturedIcon icon={AlertTriangle} color="warning" theme="light" size="sm" className="shrink-0" />
+            <div>
+              <p className="font-semibold text-primary">Varias descargas seguidas están fallando (desde {formatDateTime(data.serviceAlert.since)})</p>
+              <p className="mt-1">Suele ser YouTube o que yt-dlp quedó desactualizado. En el servidor: <code className="rounded bg-primary px-1.5 py-0.5">pipx upgrade yt-dlp</code></p>
+            </div>
+          </div>
+        )}
+
         {notice && (
           <div
             role="status"
@@ -193,12 +199,12 @@ function Dashboard() {
           <StatCard icon={CurrencyDollarCircle} label="Ingresos totales" value={stats ? formatMoney(stats.revenue) : '—'} note={stats ? `${stats.paidCount} pago${stats.paidCount === 1 ? '' : 's'} confirmado${stats.paidCount === 1 ? '' : 's'}` : ' '} />
           <StatCard icon={Users01} label="Usuarios activos" value={stats ? stats.activeUsers : '—'} note={stats ? `${stats.bannedUsers} bloqueado${stats.bannedUsers === 1 ? '' : 's'}` : ' '} />
           <StatCard icon={BarChart01} label="Descargas totales" value={stats ? stats.downloadsTotal.toLocaleString('es-MX') : '—'} note={stats ? `${stats.downloadsToday.toLocaleString('es-MX')} hoy` : ' '} />
-          <StatCard icon={Clock} label="Pagos pendientes" value={stats ? stats.pendingCount : '—'} note="Esperando tu confirmación" />
+          <StatCard icon={Clock} label="Pagos sin completar" value={stats ? stats.pendingCount : '—'} note="Stripe los confirma solo" />
         </div>
 
-        {/* Pagos pendientes */}
+        {/* Pagos sin completar */}
         <Panel
-          title="Pagos pendientes"
+          title="Pagos sin completar"
           action={
             <Button size="sm" color="tertiary" iconLeading={RefreshCw01} onPress={load}>
               Actualizar
@@ -208,50 +214,47 @@ function Dashboard() {
           {!data ? (
             <Empty text="Cargando..." />
           ) : data.pending.length === 0 ? (
-            <Empty text="No hay pagos pendientes." />
+            <Empty text="No hay pagos sin completar." />
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead className="bg-secondary">
-                  <tr>
-                    <Th>Referencia</Th>
-                    <Th>Cliente</Th>
-                    <Th>Plan</Th>
-                    <Th>Monto</Th>
-                    <Th>Creado</Th>
-                    <Th>Estado</Th>
-                    <Th className="text-right">Acciones</Th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-[var(--color-border-secondary)]">
-                  {data.pending.map((p) => (
-                    <tr key={p.reference}>
-                      <Td className="font-mono font-semibold text-primary">{p.reference}</Td>
-                      <Td>
-                        <Person name={p.payerName || p.telegramName} sub={p.telegramUsername ? `@${p.telegramUsername}` : p.telegramName} />
-                      </Td>
-                      <Td>{PLAN_NAMES[p.plan]}</Td>
-                      <Td className="font-semibold text-primary">{formatMoney(p.amount)}</Td>
-                      <Td>{formatDateTime(p.createdAt)}</Td>
-                      <Td>
-                        <Badge size="md" color={p.reportedAt ? 'brand' : 'gray'}>
-                          {p.reportedAt ? 'Dice que ya pagó' : 'Esperando pago'}
-                        </Badge>
-                      </Td>
-                      <Td>
-                        <div className="flex justify-end gap-2">
-                          <Button size="sm" color="primary" isLoading={busy === p.reference} isDisabled={Boolean(busy)} onPress={() => confirmPayment(p)}>
-                            Confirmar
-                          </Button>
-                          <Button size="sm" color="tertiary" isDisabled={Boolean(busy)} onPress={() => cancelPayment(p)}>
-                            Cancelar
-                          </Button>
-                        </div>
-                      </Td>
+            <div>
+              <p className="px-4 pt-4 text-sm text-tertiary sm:px-6">
+                Stripe confirma estos solo, en cuanto el cliente paga: no hace falta que hagas nada. Si llevan mucho
+                tiempo así, el cliente probablemente abandonó el pago antes de terminarlo — puedes cancelarlos.
+              </p>
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead className="bg-secondary">
+                    <tr>
+                      <Th>Referencia</Th>
+                      <Th>Cliente</Th>
+                      <Th>Plan</Th>
+                      <Th>Monto</Th>
+                      <Th>Creado</Th>
+                      <Th className="text-right">Acciones</Th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody className="divide-y divide-[var(--color-border-secondary)]">
+                    {data.pending.map((p) => (
+                      <tr key={p.reference}>
+                        <Td className="font-mono font-semibold text-primary">{p.reference}</Td>
+                        <Td>
+                          <Person name={p.payerName || '(sin datos: no terminó el checkout)'} sub={p.email} />
+                        </Td>
+                        <Td>{PLAN_NAMES[p.plan]}</Td>
+                        <Td className="font-semibold text-primary">{formatMoney(p.amount)}</Td>
+                        <Td>{formatDateTime(p.createdAt)}</Td>
+                        <Td>
+                          <div className="flex justify-end">
+                            <Button size="sm" color="tertiary" isDisabled={Boolean(busy)} onPress={() => cancelPayment(p)}>
+                              Cancelar
+                            </Button>
+                          </div>
+                        </Td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </div>
           )}
         </Panel>
@@ -261,7 +264,7 @@ function Dashboard() {
           title={`Usuarios${data ? ` (${data.users.length})` : ''}`}
           action={
             <div className="w-full sm:w-72">
-              <Input aria-label="Buscar usuario" size="sm" icon={SearchLg} placeholder="Buscar por usuario, nombre o Telegram" value={query} onChange={setQuery} />
+              <Input aria-label="Buscar usuario" size="sm" icon={SearchLg} placeholder="Buscar por usuario, nombre o correo" value={query} onChange={setQuery} />
             </div>
           }
         >
@@ -278,7 +281,7 @@ function Dashboard() {
                     <Th>Plan</Th>
                     <Th>Acceso hasta</Th>
                     <Th>Estado</Th>
-                    <Th>Telegram</Th>
+                    <Th>Correo</Th>
                     <Th>Hoy</Th>
                     <Th className="text-right">Acciones</Th>
                   </tr>
@@ -302,14 +305,19 @@ function Dashboard() {
                             {state.label}
                           </Badge>
                         </Td>
-                        <Td>{u.telegramUsername ? `@${u.telegramUsername}` : '—'}</Td>
+                        <Td>{u.email || '—'}</Td>
                         <Td>{u.downloadsToday}</Td>
                         <Td>
-                          <div className="flex justify-end">
+                          <div className="flex justify-end gap-2">
                             {u.role !== 'admin' && (
-                              <Button size="sm" color={u.status === 'banned' ? 'secondary' : 'tertiary'} isDisabled={Boolean(busy)} onPress={() => toggleBan(u)}>
-                                {u.status === 'banned' ? 'Desbloquear' : 'Bloquear'}
-                              </Button>
+                              <>
+                                <Button size="sm" color="tertiary" iconLeading={Key01} isDisabled={Boolean(busy)} onPress={() => resetPassword(u)}>
+                                  Restablecer
+                                </Button>
+                                <Button size="sm" color={u.status === 'banned' ? 'secondary' : 'tertiary'} isDisabled={Boolean(busy)} onPress={() => toggleBan(u)}>
+                                  {u.status === 'banned' ? 'Desbloquear' : 'Bloquear'}
+                                </Button>
+                              </>
                             )}
                           </div>
                         </Td>
@@ -343,7 +351,7 @@ function Dashboard() {
                     <tr key={p.reference}>
                       <Td className="font-mono font-semibold text-primary">{p.reference}</Td>
                       <Td>
-                        <Person name={p.payerName || p.telegramName} sub={p.username} />
+                        <Person name={p.payerName} sub={p.username} />
                       </Td>
                       <Td>{PLAN_NAMES[p.plan]}</Td>
                       <Td className="font-semibold text-primary">{formatMoney(p.amount)}</Td>
