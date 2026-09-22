@@ -7,6 +7,7 @@ const health = require('./health');
 const { LIMITS } = require('./plans');
 const telegram = require('./telegram');
 const adminRouter = require('./admin');
+const { strategyArgs: ytdlpStrategyArgs } = require('./ytdlp-strategy');
 const { spawn } = require('child_process');
 const path = require('path');
 const fs = require('fs');
@@ -48,6 +49,9 @@ app.use((req, res, next) => {
   }
   next();
 });
+// Para que el hospedaje (Railway u otro) sepa que el proceso sigue vivo. No revela nada del negocio.
+app.get('/healthz', (req, res) => res.json({ ok: true }));
+
 app.use(express.json({ limit: '10kb' }));
 app.use(auth.sameOriginOnly);
 
@@ -139,7 +143,7 @@ function audioSelector(config, extraFilter = '') {
 function guardArgs(config) {
   const filters = ['!is_live'];
   if (!config.startTime && !config.endTime) filters.push(`duration<=?${LIMITS.maxDurationMin * 60}`);
-  return ['--match-filter', filters.join(' & '), '--max-filesize', LIMITS.maxFileSize];
+  return ['--match-filter', filters.join(' & '), '--max-filesize', LIMITS.maxFileSize, ...ytdlpStrategyArgs()];
 }
 
 function buildVideoArgs(config) {
@@ -493,6 +497,15 @@ app.get('/api/status/:jobId', auth.requireAuth, (req, res) => {
     })),
   });
 });
+
+// Un solo servicio (p. ej. Railway, sin nginx delante): si existe el frontend ya compilado (dist/, junto al
+// proyecto), este backend también lo sirve. En desarrollo (Vite en :5174) esa carpeta no existe y esto no hace nada.
+const DIST_DIR = process.env.DUOKIT_DIST_DIR || path.join(__dirname, '..', 'dist');
+if (fs.existsSync(path.join(DIST_DIR, 'index.html'))) {
+  app.use(express.static(DIST_DIR, { index: false }));
+  // Cualquier ruta que no sea de la API cae en el index.html (rutas de la SPA: /app, /admin, /legal...).
+  app.get(/^(?!\/api\/|\/downloads\/).*/, (req, res) => res.sendFile(path.join(DIST_DIR, 'index.html')));
+}
 
 // Errores: siempre JSON y sin detalles internos (rutas, pila de llamadas).
 app.use((req, res) => res.status(404).json({ error: 'No encontrado.' }));

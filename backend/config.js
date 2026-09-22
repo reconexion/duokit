@@ -25,7 +25,8 @@ module.exports = {
   // Dirección pública de la app (se usa en los mensajes que recibe el cliente).
   PUBLIC_URL: (process.env.PUBLIC_URL || 'http://localhost:5173').replace(/\/$/, ''),
   SELLER: {
-    name: 'DuoKit',
+    // Alias público del negocio. Nunca pongas aquí un nombre real: aparece en recibos, en el bot y en el panel.
+    name: (process.env.SELLER_NAME || 'DuoKit').trim(),
     // Cuenta donde se reciben las transferencias (SELLER_ACCOUNT en backend/.env). Una CLABE tiene 18 dígitos;
     // con 16 es una tarjeta de débito, y así se le nombra al cliente.
     account: ACCOUNT,

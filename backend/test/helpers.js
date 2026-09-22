@@ -34,8 +34,13 @@ const freePort = () =>
     });
   });
 
-async function startServer(extraEnv = {}) {
+async function startServer(extraEnv = {}, { dist } = {}) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'duokit-test-'));
+  if (dist) {
+    fs.mkdirSync(path.join(root, 'dist'));
+    fs.writeFileSync(path.join(root, 'dist', 'index.html'), dist.indexHtml ?? '<!doctype html><title>test</title>');
+    if (dist.files) for (const [name, content] of Object.entries(dist.files)) fs.writeFileSync(path.join(root, 'dist', name), content);
+  }
   const bin = path.join(root, 'bin');
   fs.mkdirSync(bin);
   fs.writeFileSync(path.join(bin, 'yt-dlp'), FAKE_YTDLP, { mode: 0o755 });

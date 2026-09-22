@@ -1,0 +1,12 @@
+node_modules
+backend/node_modules
+backend/data
+backend/test
+backend/*.log
+dist
+.env
+backend/.env
+*.pid
+*.log
+backups/
+.git

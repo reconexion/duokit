@@ -5,6 +5,7 @@ const audit = require('./audit');
 const billing = require('./billing');
 const payments = require('./payments');
 const { planOf } = require('./plans');
+const diagnose = require('./diagnose');
 
 const router = express.Router();
 router.use(auth.requireAdmin);
@@ -21,6 +22,13 @@ const publicPayment = (p) => ({
   reportedAt: p.reportedAt,
   confirmedAt: p.confirmedAt,
   username: p.username,
+  termsAcceptedAt: p.termsAcceptedAt || null,
+});
+
+// Prueba varias formas de hablarle a YouTube desde este servidor y dice cuál (si alguna) evita el bloqueo de IP de nube.
+// No descarga nada real (--simulate); tarda unos segundos porque prueba varias opciones una por una.
+router.get('/ytdlp-diagnose', async (req, res) => {
+  res.json(await diagnose.diagnose());
 });
 
 router.get('/summary', (req, res) => {
