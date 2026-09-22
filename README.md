@@ -1,13 +1,13 @@
 # duokit
 
 Descargador de YouTube (video, audio y miniatura, con recorte por tiempo) que se vende por suscripción:
-el cliente elige su plan en el sitio, paga con **tarjeta por Stripe** y su cuenta queda lista al momento,
-en la misma pantalla — sin bot, sin que nadie confirme nada a mano.
+el cliente elige su plan en el sitio, paga con **tarjeta por Mercado Pago (Checkout Pro)** y su cuenta queda lista
+al momento, en la misma pantalla — sin bot, sin que nadie confirme nada a mano.
 
 - **Frontend:** React + Vite + Tailwind + Untitled UI.
 - **Backend:** Node.js/Express + `yt-dlp`. Sin base de datos: todo en archivos JSON dentro de `backend/data/`.
 - **Rutas:** `/` página pública (landing, con los planes) · `/app` la aplicación · `/admin` panel del administrador
-  · `/pago` a donde Stripe regresa al cliente después de pagar.
+  · `/pago` a donde Mercado Pago regresa al cliente después de pagar.
 
 ## Puesta en marcha
 
@@ -15,35 +15,39 @@ Requisitos: `yt-dlp` y `ffmpeg` en el `PATH`, y Node 22.
 
 ```bash
 npm install && npm install --prefix backend
-cp backend/.env.example backend/.env     # y rellena las claves de Stripe (ver abajo)
+cp backend/.env.example backend/.env     # y rellena las claves de Mercado Pago (ver abajo)
 npm run user:admin                       # crea el administrador (muestra su contraseña una sola vez)
 npm start                                # backend en :3001 + Vite en :5173
 ```
 
-### Configurar Stripe
+### Configurar Mercado Pago
 
-1. Crea una cuenta en [dashboard.stripe.com](https://dashboard.stripe.com) y actívala (Stripe pide tus datos fiscales
-   para poder pagarte: ver "Datos y seguridad" abajo).
-2. Copia tu clave secreta (`sk_test_...` para probar primero, `sk_live_...` cuando ya cobres de verdad) a
-   `backend/.env` como `STRIPE_SECRET_KEY=...`.
-3. En el Dashboard, crea un webhook que apunte a `https://tudominio.com/api/webhook/stripe`, escuchando el evento
-   `checkout.session.completed`. Copia el "signing secret" (`whsec_...`) a `backend/.env` como `STRIPE_WEBHOOK_SECRET=...`.
-4. Reinicia. Sin `STRIPE_SECRET_KEY`, el sitio responde "Las compras no están disponibles por ahora" en vez de vender.
+1. Crea una cuenta en [mercadopago.com.mx/developers](https://www.mercadopago.com.mx/developers) y actívala (Mercado
+   Pago pide tus datos fiscales para poder pagarte: ver "Datos y seguridad" abajo).
+2. En "Tus integraciones", copia el access token (`TEST-...` para probar primero, `APP_USR-...` cuando ya cobres de
+   verdad) a `backend/.env` como `MERCADOPAGO_ACCESS_TOKEN=...`.
+3. En la misma sección, Webhooks → Configurar notificaciones, apunta a `https://tudominio.com/api/webhook/mercadopago`
+   y copia la "Clave secreta" (distinta del access token) a `backend/.env` como `MERCADOPAGO_WEBHOOK_SECRET=...`.
+4. Reinicia. Sin `MERCADOPAGO_ACCESS_TOKEN`, el sitio responde "Las compras no están disponibles por ahora" en vez de
+   vender; sin `MERCADOPAGO_WEBHOOK_SECRET`, las compras se pueden iniciar pero nunca se confirman solas (usa
+   `/admin` para confirmar a mano mientras tanto).
 
-`PUBLIC_URL` en `backend/.env` es a dónde Stripe regresa al cliente después de pagar (`/pago`); ponla en tu dominio real.
+`PUBLIC_URL` en `backend/.env` es a dónde Mercado Pago regresa al cliente después de pagar (`/pago`); ponla en tu dominio real.
 
 ### Flujo de una venta
 
-1. El cliente marca la casilla de términos, elige un plan y toca "Comprar". El sitio crea el checkout y lo manda
-   directo a Stripe.
-2. En Stripe paga con tarjeta y da su correo y nombre (Stripe los recoge al cobrar; duokit nunca ve el número de tarjeta).
-3. Stripe avisa al backend por el webhook; la cuenta se crea (o se renueva, si el correo ya tenía una) sola.
-4. Stripe regresa al cliente a `/pago`, que consulta si ya está lista y muestra su **usuario y contraseña** ahí mismo
-   (la contraseña sale difuminada, con un botón para revelarla — es la única vez que se muestra) y el recibo en PDF.
+1. El cliente marca la casilla de términos, elige un plan y toca "Comprar". El sitio crea la preferencia de pago y
+   lo manda directo a Mercado Pago.
+2. En Mercado Pago paga con tarjeta y da su correo y nombre (Mercado Pago los recoge al cobrar; duokit nunca ve el
+   número de tarjeta). Solo se aceptan pagos que se resuelven al momento (`binary_mode`): nada de pagos en efectivo
+   (OXXO, etc.) que tardan días.
+3. Mercado Pago avisa al backend por el webhook; la cuenta se crea (o se renueva, si el correo ya tenía una) sola.
+4. Mercado Pago regresa al cliente a `/pago`, que consulta si ya está lista y muestra su **usuario y contraseña** ahí
+   mismo (la contraseña sale difuminada, con un botón para revelarla — es la única vez que se muestra) y el recibo en PDF.
 
 No hay ningún aviso push para ti: nadie te escribe cuando entra una venta. Revisa `/admin` de vez en cuando (o el
-Dashboard de Stripe, que sí manda correo por cada cobro) — ahí ves los pagos confirmados, los que se quedaron a
-medias y si hay alguna alerta de servicio.
+panel de Mercado Pago, que también lista los cobros) — ahí ves los pagos confirmados, los que se quedaron a medias
+y si hay alguna alerta de servicio.
 
 Si el cliente pierde su contraseña: con la sesión abierta puede generar una nueva desde "Mi cuenta" en `/app`
 (cierra sus otras sesiones, no la que la pidió). Si ya cerró sesión en todos lados, tienes que restablecérsela tú
@@ -76,9 +80,9 @@ Todo esto se cambia en `backend/plans.js`. Protecciones anti-abuso (también ah�
 ## Panel de administración (`/admin`)
 
 Entras con el usuario `admin`. Muestra ingresos totales, usuarios activos, descargas (hoy y total), pagos sin
-completar (checkouts de Stripe abandonados, con **Cancelar** — no hay botón de confirmar a mano: eso lo hace Stripe
-solo), todos los usuarios (plan, vencimiento, estado, correo, descargas de hoy) con **Bloquear/Desbloquear** y
-**Restablecer** contraseña, y los últimos pagos.
+completar (checkouts de Mercado Pago abandonados, con **Cancelar** — no hay botón de confirmar a mano en condiciones
+normales: eso lo hace Mercado Pago solo), todos los usuarios (plan, vencimiento, estado, correo, descargas de hoy)
+con **Bloquear/Desbloquear** y **Restablecer** contraseña, y los últimos pagos.
 
 ## Usuarios desde la terminal
 
@@ -93,10 +97,11 @@ npm run user:remove -- cliente1
 ## Datos y seguridad
 
 - `backend/data/` (usuarios, pagos, sesiones, auditoría, clave de firma) y `backend/.env` **no se suben a git** ni se comparten.
-- **Stripe exige datos fiscales (RFC) de la cuenta a la que se le paga** para activarla en México y poder retirar a una
-  cuenta bancaria — no hay forma de evitarlo, ni cambiando de procesador (es un requisito regulatorio, no de Stripe).
-- El webhook (`/api/webhook/stripe`) verifica la firma de cada evento con `STRIPE_WEBHOOK_SECRET` antes de activar
-  nada; una petición sin esa firma (o con una falsa) se rechaza con 400 y no activa ninguna cuenta.
+- **Mercado Pago exige datos fiscales (RFC) de la cuenta a la que se le paga** para activarla en México y poder
+  retirar a una cuenta bancaria — no hay forma de evitarlo, ni cambiando de procesador (es un requisito regulatorio,
+  no de Mercado Pago en particular).
+- El webhook (`/api/webhook/mercadopago`) verifica la firma de cada notificación con `MERCADOPAGO_WEBHOOK_SECRET`
+  antes de activar nada; una petición sin esa firma (o con una falsa) se rechaza con 400 y no activa ninguna cuenta.
 - Contraseñas con `scrypt`; sesión en cookie `httpOnly`; peticiones de otros sitios rechazadas; 5 intentos de login
   fallidos (por cuenta y desde la misma IP) bloquean 15 min; el intento se cuenta al instante, así que una ráfaga
   simultánea tampoco se cuela.

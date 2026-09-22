@@ -28,7 +28,7 @@ sudo -u duokit npm ci --omit=dev --prefix backend
 cp backend/.env.example backend/.env && nano backend/.env
 ```
 
-En `backend/.env` pon: `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET` (del webhook que apunta a `/api/webhook/stripe`), `PUBLIC_URL=https://tudominio.com` y **`TRUST_PROXY=1`**.
+En `backend/.env` pon: `MERCADOPAGO_ACCESS_TOKEN`, `MERCADOPAGO_WEBHOOK_SECRET` (del webhook que apunta a `/api/webhook/mercadopago`), `PUBLIC_URL=https://tudominio.com` y **`TRUST_PROXY=1`**.
 Crea el administrador (muestra su contraseña una sola vez): `sudo -u duokit npm run user:admin`.
 
 El frontend se compila con el enlace de contacto de soporte (la variable se "hornea" al compilar):
@@ -74,8 +74,8 @@ Prueba restaurar una vez: `tar -xzf duokit-data-*.tar.gz -C /tmp` y revisa que `
 ## 7. Lista de comprobación antes de vender
 
 - [ ] Descarga real desde el servidor (video, audio, miniatura).
-- [ ] Compra de prueba de punta a punta en el sitio real: elige un plan → paga en Stripe → en `/pago` aparecen tu
+- [ ] Compra de prueba de punta a punta en el sitio real: elige un plan → paga en Mercado Pago → en `/pago` aparecen tu
       usuario y contraseña → entra y descarga algo.
-- [ ] `https://tudominio.com/legal` carga y el webhook de Stripe llega (revisa `journalctl -u duokit-backend`).
+- [ ] `https://tudominio.com/legal` carga y el webhook de Mercado Pago llega (revisa `journalctl -u duokit-backend`).
 - [ ] Reiniciar el servidor y comprobar que todo vuelve solo.
 - [ ] Restaurar un respaldo de prueba.

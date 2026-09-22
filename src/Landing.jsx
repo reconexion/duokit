@@ -137,7 +137,7 @@ export default function Landing() {
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error || t('plans.checkoutError'));
-      window.location.href = data.url; // a partir de aquí, Stripe: pide correo, nombre y tarjeta
+      window.location.href = data.url; // a partir de aquí, Mercado Pago: pide correo, nombre y tarjeta
     } catch (err) {
       setError(err.message);
       setLoadingPlan(null);

@@ -1,6 +1,6 @@
-// A esta página vuelve el cliente después de pagar (o cancelar) en Stripe. La cuenta se crea por el webhook de
-// Stripe (casi siempre en un par de segundos): esta pantalla pregunta cada tanto si ya está lista y, en cuanto lo
-// está, muestra el usuario y la contraseña — la contraseña empieza difuminada, con un botón para revelarla.
+// A esta página vuelve el cliente después de pagar (o cancelar) en Mercado Pago. La cuenta se crea por el webhook
+// de Mercado Pago (casi siempre en un par de segundos): esta pantalla pregunta cada tanto si ya está lista y, en
+// cuanto lo está, muestra el usuario y la contraseña — la contraseña empieza difuminada, con un botón para revelarla.
 // Es la ÚNICA vez que se muestra: si se pierde, hay que generar una nueva ya con la sesión iniciada, o escribir a soporte.
 import { useEffect, useRef, useState } from 'react';
 import { CheckCircle, Copy01, Download01, Eye, EyeOff, XCircle } from '@untitledui/icons';
@@ -60,20 +60,20 @@ function Row({ label, value }) {
 
 function SuccessCard() {
   const { t } = useI18n();
-  const sessionId = new URLSearchParams(window.location.search).get('session_id');
+  const checkoutToken = new URLSearchParams(window.location.search).get('checkout');
   const [account, setAccount] = useState(null); // { ready, username, name, created, password, accessUntil }
   const [timedOut, setTimedOut] = useState(false);
   const startedAt = useRef(Date.now());
 
   useEffect(() => {
-    if (!sessionId) {
+    if (!checkoutToken) {
       setTimedOut(true);
       return;
     }
     let cancelled = false;
     const poll = async () => {
       try {
-        const res = await fetch(`/api/checkout-status/${encodeURIComponent(sessionId)}`, { credentials: 'same-origin' });
+        const res = await fetch(`/api/checkout-status/${encodeURIComponent(checkoutToken)}`, { credentials: 'same-origin' });
         const data = await res.json();
         if (cancelled) return;
         if (data.ready) return setAccount(data);
@@ -87,7 +87,7 @@ function SuccessCard() {
     return () => {
       cancelled = true;
     };
-  }, [sessionId]);
+  }, [checkoutToken]);
 
   if (!account) {
     return (
@@ -131,8 +131,8 @@ function SuccessCard() {
         <Button size="lg" color="primary" className="flex-1" href="/app">
           {t('payment.enter')}
         </Button>
-        {sessionId && (
-          <Button size="lg" color="secondary" iconLeading={Download01} href={`/api/receipt/${encodeURIComponent(sessionId)}`}>
+        {checkoutToken && (
+          <Button size="lg" color="secondary" iconLeading={Download01} href={`/api/receipt/${encodeURIComponent(checkoutToken)}`}>
             {t('payment.receipt')}
           </Button>
         )}

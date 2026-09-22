@@ -1,10 +1,10 @@
 // Guarda un rato el usuario/contraseña recién creados (o "tu acceso se renovó") para que la pantalla de "pago
-// exitoso" los muestre, apenas el webhook de Stripe confirma el pago. No se guarda en disco — la contraseña real
-// solo existe en texto plano hasta que se hashea (ver auth.js) — es solo el ratito entre el webhook y esa pantalla.
-// La llave es el id de la sesión de Stripe: es del propio Stripe, larga y al azar, así que sirve como "token" sin
-// necesidad de inventar uno aparte (nadie más la conoce salvo quien acaba de pagar y trae el enlace de vuelta).
+// exitoso" los muestre, apenas el webhook de Mercado Pago confirma el pago. No se guarda en disco — la contraseña
+// real solo existe en texto plano hasta que se hashea (ver auth.js) — es solo el ratito entre el webhook y esa
+// pantalla. La llave es el checkoutToken (payments.js): largo y al azar, así que sirve como "token" sin necesidad
+// de inventar uno aparte (nadie más lo conoce salvo quien acaba de pagar y trae el enlace de vuelta).
 const TTL_MS = 15 * 60 * 1000; // 15 min: de sobra para que la pestaña cargue, pero no se queda ahí para siempre
-const store = new Map(); // stripeSessionId -> { ...datos, expiresAt }
+const store = new Map(); // checkoutToken -> { ...datos, expiresAt }
 
 function stash(sessionId, data) {
   store.set(sessionId, { ...data, expiresAt: Date.now() + TTL_MS });

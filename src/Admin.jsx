@@ -199,7 +199,7 @@ function Dashboard() {
           <StatCard icon={CurrencyDollarCircle} label="Ingresos totales" value={stats ? formatMoney(stats.revenue) : '—'} note={stats ? `${stats.paidCount} pago${stats.paidCount === 1 ? '' : 's'} confirmado${stats.paidCount === 1 ? '' : 's'}` : ' '} />
           <StatCard icon={Users01} label="Usuarios activos" value={stats ? stats.activeUsers : '—'} note={stats ? `${stats.bannedUsers} bloqueado${stats.bannedUsers === 1 ? '' : 's'}` : ' '} />
           <StatCard icon={BarChart01} label="Descargas totales" value={stats ? stats.downloadsTotal.toLocaleString('es-MX') : '—'} note={stats ? `${stats.downloadsToday.toLocaleString('es-MX')} hoy` : ' '} />
-          <StatCard icon={Clock} label="Pagos sin completar" value={stats ? stats.pendingCount : '—'} note="Stripe los confirma solo" />
+          <StatCard icon={Clock} label="Pagos sin completar" value={stats ? stats.pendingCount : '—'} note="Mercado Pago los confirma solo" />
         </div>
 
         {/* Pagos sin completar */}
@@ -218,7 +218,7 @@ function Dashboard() {
           ) : (
             <div>
               <p className="px-4 pt-4 text-sm text-tertiary sm:px-6">
-                Stripe confirma estos solo, en cuanto el cliente paga: no hace falta que hagas nada. Si llevan mucho
+                Mercado Pago confirma estos solo, en cuanto el cliente paga: no hace falta que hagas nada. Si llevan mucho
                 tiempo así, el cliente probablemente abandonó el pago antes de terminarlo — puedes cancelarlos.
               </p>
               <div className="overflow-x-auto">

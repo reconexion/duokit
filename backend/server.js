@@ -1,5 +1,5 @@
 const express = require('express');
-require('./config'); // primero: fija la zona horaria antes de cualquier fecha
+const config = require('./config'); // primero: fija la zona horaria antes de cualquier fecha
 const auth = require('./auth');
 const audit = require('./audit');
 const limits = require('./limits');
@@ -8,7 +8,7 @@ const { LIMITS, PLANS } = require('./plans');
 const adminRouter = require('./admin');
 const billing = require('./billing');
 const payments = require('./payments');
-const stripeCheckout = require('./stripe-checkout');
+const mercadopagoCheckout = require('./mercadopago-checkout');
 const credentials = require('./credentials');
 const { buildReceipt } = require('./receipts');
 const { strategyArgs: ytdlpStrategyArgs } = require('./ytdlp-strategy');
@@ -56,44 +56,57 @@ app.use((req, res, next) => {
 // Para que el hospedaje (Railway u otro) sepa que el proceso sigue vivo. No revela nada del negocio.
 app.get('/healthz', (req, res) => res.json({ ok: true }));
 
-// Webhook de Stripe: viene de los servidores de Stripe, no de un navegador, así que va ANTES de sameOriginOnly
-// (que es una defensa pensada para peticiones de navegador) y con el cuerpo crudo (express.raw), no parseado como
-// JSON, porque la firma que lo autentica (Stripe-Signature) se calcula sobre los bytes exactos que Stripe mandó.
-app.post('/api/webhook/stripe', express.raw({ type: 'application/json', limit: '100kb' }), async (req, res) => {
-  let event;
+// Webhook de Mercado Pago: viene de sus servidores, no de un navegador, así que va ANTES de sameOriginOnly (una
+// defensa pensada para peticiones de navegador). A diferencia de Stripe, la firma no se calcula sobre el cuerpo
+// sino sobre el id de la notificación (?data.id= en la URL), el header x-request-id y un timestamp — así que el
+// cuerpo sí se puede parsear como JSON normal (solo para esta ruta, antes del parser global de abajo).
+app.post('/api/webhook/mercadopago', express.json({ limit: '20kb' }), async (req, res) => {
+  const dataId = req.query['data.id'] || req.body?.data?.id;
   try {
-    event = stripeCheckout.verifyWebhookEvent(req.body, req.headers['stripe-signature']);
+    mercadopagoCheckout.verifyWebhookSignature({
+      xSignature: req.headers['x-signature'],
+      xRequestId: req.headers['x-request-id'],
+      dataId,
+    });
   } catch (err) {
-    console.error('Webhook de Stripe con firma inválida:', err.message);
+    console.error('Webhook de Mercado Pago con firma inválida:', err.message);
     return res.status(400).send('Firma inválida.');
   }
-  if (event.type === 'checkout.session.completed') {
-    const session = event.data.object;
-    const reference = session.metadata?.reference;
-    if (!reference) {
-      console.error('Webhook de Stripe: checkout.session.completed sin metadata.reference', session.id);
-    } else {
-      try {
-        const result = await billing.confirm(reference, 'stripe', {
-          email: session.customer_details?.email || null,
-          payerName: session.customer_details?.name || null,
+  const type = req.query.type || req.body?.type;
+  if (type === 'payment' && dataId) {
+    try {
+      // Nunca se confía en el cuerpo de la notificación (solo avisa "hay novedades"): el estado real del pago se
+      // pide aparte, a la API, con el id que trajo.
+      const payment = await mercadopagoCheckout.retrievePayment(dataId);
+      const checkoutToken = payment.external_reference;
+      const internalPayment = checkoutToken ? payments.getByCheckoutToken(checkoutToken) : null;
+      if (!internalPayment) {
+        console.error(`Webhook de Mercado Pago: pago ${dataId} sin external_reference reconocible (¿notificación de prueba?)`);
+      } else if (payment.status === 'approved') {
+        const payerName = [payment.payer?.first_name, payment.payer?.last_name].filter(Boolean).join(' ') || null;
+        const result = await billing.confirm(internalPayment.reference, 'mercadopago', {
+          email: payment.payer?.email || null,
+          payerName,
         });
-        // La pantalla de "pago exitoso" (session_id en la URL de vuelta) consulta esto para mostrar las credenciales.
-        credentials.stash(session.id, {
+        // La pantalla de "pago exitoso" (el checkoutToken en la URL de vuelta) consulta esto para mostrar las credenciales.
+        credentials.stash(checkoutToken, {
           username: result.user.username,
           name: result.user.name,
           created: result.created,
           password: result.created ? result.password : null,
           accessUntil: result.accessUntil,
         });
-      } catch (err) {
-        // Reintentar no lo arregla: ya estaba pagado/cancelado, o la referencia no existe. Se responde 200 de todos
-        // modos para que Stripe no siga reintentando un evento que nunca va a poder procesarse distinto.
-        console.error(`Webhook de Stripe: no se pudo confirmar ${reference}:`, err.message);
       }
+      // Si no está "approved" (pending/rejected/in_process) no hay nada que activar todavía: con binary_mode
+      // (mercadopago-checkout.js) no debería llegar "pending", pero por si Mercado Pago manda otra notificación
+      // después con el estado final, no hace falta hacer nada especial aquí — simplemente no se activa nada ahora.
+    } catch (err) {
+      // Reintentar no siempre lo arregla (referencia ya confirmada, notificación de prueba con un data.id que no
+      // existe). Se responde 200 de todos modos para que Mercado Pago no siga reintentando algo que no va a cambiar.
+      console.error(`Webhook de Mercado Pago: no se pudo procesar data.id=${dataId}:`, err.message);
     }
   }
-  // Stripe solo necesita saber que se recibió; espera una respuesta rápida.
+  // Mercado Pago solo necesita saber que se recibió (200 o 201); espera una respuesta rápida (hasta 22s).
   res.json({ received: true });
 });
 
@@ -464,7 +477,7 @@ app.post('/api/account/reset-password', auth.requireAuth, async (req, res) => {
 // Compra (pública: no hace falta haber iniciado sesión — es justo cómo se crea la cuenta)
 // ---------------------------------------------------------------------------
 
-// Tope simple por IP: crear una sesión de Stripe por cada clic es normal, pero no cientos por minuto.
+// Tope simple por IP: crear una preferencia de pago por cada clic es normal, pero no cientos por minuto.
 const checkoutHits = new Map();
 function checkoutAllowed(ip) {
   const now = Date.now();
@@ -474,42 +487,41 @@ function checkoutAllowed(ip) {
   return recent.length <= 10;
 }
 
-// Crea la referencia interna y la sesión de pago, y manda al navegador derecho a Stripe. El nombre, el correo y la
-// aceptación de los términos los recoge el propio Stripe (billing_address_collection en stripe-checkout.js);
-// aceptar los términos se confirma en el propio sitio, antes de llamar a esto (ver Landing.jsx).
+// Crea la referencia interna y la preferencia de pago, y manda al navegador derecho a Mercado Pago. El nombre, el
+// correo y los datos de la tarjeta los recoge el propio Mercado Pago en su checkout hospedado; aceptar los
+// términos se confirma en el propio sitio, antes de llamar a esto (ver Landing.jsx).
 app.post('/api/checkout', async (req, res) => {
   if (!checkoutAllowed(req.ip)) return res.status(429).json({ error: 'Demasiados intentos. Espera un momento.' });
-  if (!stripeCheckout.enabled) return res.status(503).json({ error: 'Las compras no están disponibles por ahora.' });
+  if (!mercadopagoCheckout.enabled) return res.status(503).json({ error: 'Las compras no están disponibles por ahora.' });
   const { plan, acceptedTerms } = req.body || {};
   if (!Object.hasOwn(PLANS, plan)) return res.status(400).json({ error: 'Plan inválido.' });
   if (acceptedTerms !== true) return res.status(400).json({ error: 'Debes aceptar los términos para continuar.' });
 
   const payment = payments.create({ plan, termsAcceptedAt: new Date().toISOString() });
   try {
-    const session = await stripeCheckout.createCheckoutSession({ reference: payment.reference, plan });
-    payments.update(payment.reference, { stripeSessionId: session.id });
+    const preference = await mercadopagoCheckout.createPreference({ checkoutToken: payment.checkoutToken, plan });
     audit.log('checkout_started', { reference: payment.reference, plan, ip: req.ip });
-    res.json({ url: session.url });
+    res.json({ url: preference.init_point });
   } catch (err) {
-    console.error('No se pudo crear la sesión de Stripe:', err.message);
+    console.error('No se pudo crear la preferencia de Mercado Pago:', err.message);
     payments.update(payment.reference, { status: 'cancelled', cancelledAt: new Date().toISOString() });
     res.status(502).json({ error: 'No se pudo iniciar el pago. Inténtalo de nuevo en un momento.' });
   }
 });
 
-// La pantalla de "pago exitoso" pregunta esto con el session_id que Stripe le puso en la URL de vuelta, hasta que
-// el webhook (que puede tardar unos segundos) ya haya activado la cuenta. sessionId es un id largo y al azar de
-// Stripe: nadie más que quien acaba de pagar (y trae el enlace de vuelta) lo conoce.
-app.get('/api/checkout-status/:sessionId', (req, res) => {
-  const entry = credentials.peek(req.params.sessionId);
+// La pantalla de "pago exitoso" pregunta esto con el checkoutToken que se puso en la URL de vuelta, hasta que el
+// webhook (que puede tardar unos segundos) ya haya activado la cuenta. checkoutToken es un id largo y al azar
+// (payments.js): nadie más que quien acaba de pagar (y trae el enlace de vuelta) lo conoce.
+app.get('/api/checkout-status/:checkoutToken', (req, res) => {
+  const entry = credentials.peek(req.params.checkoutToken);
   if (!entry) return res.json({ ready: false });
   const { username, name, created, password, accessUntil } = entry;
   res.json({ ready: true, username, name, created, password, accessUntil });
 });
 
-// El recibo, descargable desde la pantalla de "pago exitoso" con el mismo session_id (nadie más lo conoce).
-app.get('/api/receipt/:sessionId', async (req, res) => {
-  const payment = payments.getByStripeSession(req.params.sessionId);
+// El recibo, descargable desde la pantalla de "pago exitoso" con el mismo checkoutToken (nadie más lo conoce).
+app.get('/api/receipt/:checkoutToken', async (req, res) => {
+  const payment = payments.getByCheckoutToken(req.params.checkoutToken);
   if (!payment || payment.status !== 'paid') return res.status(404).json({ error: 'Recibo no encontrado.' });
   const pdf = await buildReceipt(payment, 'paid');
   res.setHeader('Content-Type', 'application/pdf');
@@ -631,5 +643,6 @@ app.use((err, req, res, next) => {
 app.listen(PORT, HOST, () => {
   console.log(`Backend de yt-dlp escuchando en http://${HOST}:${PORT}`);
   console.log(`Archivos temporales (se borran solos): ${JOBS_ROOT}`);
-  if (!stripeCheckout.enabled) console.log('Stripe desactivado: falta STRIPE_SECRET_KEY en backend/.env (las compras no funcionarán).');
+  if (!mercadopagoCheckout.enabled) console.log('Mercado Pago desactivado: falta MERCADOPAGO_ACCESS_TOKEN en backend/.env (las compras no funcionarán).');
+  else if (!config.MERCADOPAGO_WEBHOOK_SECRET) console.log('AVISO: falta MERCADOPAGO_WEBHOOK_SECRET — los pagos se podrán iniciar pero nunca se confirmarán solos (el webhook siempre fallará la firma). Usa /admin para confirmar a mano mientras tanto.');
 });

@@ -19,7 +19,7 @@ export default {
     subtitle: 'Paste the link, choose video, audio or thumbnail, and your browser saves it. Nothing to install, no ads, and clip trimming included.',
     buy: 'Buy',
     haveAccount: 'I already have an account',
-    payNote: 'Pay by card (Stripe) and your account is ready instantly, automatically.',
+    payNote: 'Pay by card (Mercado Pago) and your account is ready instantly, automatically.',
     mascotLabel: 'Koala mascot. Follows your cursor and reacts if you touch it.',
     previewLinkLabel: 'Video link',
     previewVideo: 'Video',
@@ -42,8 +42,8 @@ export default {
     subheading: 'No bot, no waiting on anyone: everything happens right here.',
     items: [
       { title: 'Choose your plan', text: 'Basic or Lifetime, right here.' },
-      { title: 'Pay by card', text: 'A secure Stripe checkout. duokit never sees your card.' },
-      { title: 'Log in and download', text: 'As soon as Stripe confirms the charge, your account is ready, right on the screen.' },
+      { title: 'Pay by card', text: 'A secure Mercado Pago checkout. duokit never sees your card.' },
+      { title: 'Log in and download', text: 'As soon as Mercado Pago confirms the charge, your account is ready, right on the screen.' },
     ],
   },
   plans: {
@@ -73,8 +73,8 @@ export default {
   faq: {
     heading: 'Frequently asked questions',
     items: [
-      { q: 'How do I pay?', a: 'By card, through a secure Stripe checkout. Choose your plan, pay, and your account is ready on the same screen.' },
-      { q: 'How long until my account is active?', a: 'Seconds: as soon as Stripe confirms the charge, you see your username and password right there, with no one confirming anything by hand.' },
+      { q: 'How do I pay?', a: 'By card, through a secure Mercado Pago checkout. Choose your plan, pay, and your account is ready on the same screen.' },
+      { q: 'How long until my account is active?', a: 'Seconds: as soon as Mercado Pago confirms the charge, you see your username and password right there, with no one confirming anything by hand.' },
       { q: 'Can I log in from several devices?', a: 'Yes, up to 2 sessions open at once with the same account. If you open a third one, the oldest one is closed.' },
       { q: 'Are there refunds?', a: 'Purchases are final: no refund for changing your mind or for not using your access. There is a refund if the service fails due to our own fault (for example, the system went down). Write to us and we’ll sort it out.' },
       { q: 'What happens when the Basic plan expires?', a: 'Your access ends on the date shown. To continue, buy again with the same email: the renewal adds 30 days to your account.' },
@@ -248,7 +248,7 @@ export default {
           {
             h: '1. The service',
             p: [
-              'duokit is a tool for downloading video, audio (MP3) and thumbnails from YouTube, from your browser. It is purchased on this site and paid by card through Stripe. By paying for or using duokit you accept these terms.',
+              'duokit is a tool for downloading video, audio (MP3) and thumbnails from YouTube, from your browser. It is purchased on this site and paid by card through Mercado Pago. By paying for or using duokit you accept these terms.',
             ],
           },
           {
@@ -311,9 +311,9 @@ export default {
           {
             h: 'What data we keep',
             p: [
-              'Your email and the name you give when paying (Stripe collects them when charging you and passes them to us).',
+              'Your email and the name you give when paying (Mercado Pago collects them when charging you and passes them to us).',
               'Your account data: username (we generate it), name, plan, expiration date, and your password, which is stored encrypted (never in plain text).',
-              'Your payment data: reference, plan, amount and dates. Your card details are requested and processed directly by Stripe: we never see or store them.',
+              'Your payment data: reference, plan, amount and dates. Your card details are requested and processed directly by Mercado Pago: we never see or store them.',
               'Your usage data: date and IP address of your logins and of each download, with the video link and the quality chosen. We do not keep the files you download.',
             ],
           },
@@ -326,7 +326,7 @@ export default {
           {
             h: 'Who we share it with',
             p: [
-              'We do not sell your data. We share it only with those needed to operate: Stripe, which processes your payment (they handle your card and your email, under their own privacy rules). We will hand it over if a competent authority requires it of us.',
+              'We do not sell your data. We share it only with those needed to operate: Mercado Pago, which processes your payment (they handle your card and your email, under their own privacy rules). We will hand it over if a competent authority requires it of us.',
             ],
           },
           {

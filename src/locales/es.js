@@ -18,7 +18,7 @@ export default {
     subtitle: 'Pega el enlace, elige video, audio o miniatura y tu navegador lo guarda. Sin instalar nada, sin anuncios y con recorte de fragmentos incluido.',
     buy: 'Comprar',
     haveAccount: 'Ya tengo cuenta',
-    payNote: 'Pagas con tarjeta (Stripe) y tu cuenta queda lista al momento, automático.',
+    payNote: 'Pagas con tarjeta (Mercado Pago) y tu cuenta queda lista al momento, automático.',
     mascotLabel: 'Koala mascota. Sigue tu cursor y reacciona si lo tocas.',
     previewLinkLabel: 'Enlace del video',
     previewVideo: 'Video',
@@ -41,8 +41,8 @@ export default {
     subheading: 'Sin bot, sin esperar a nadie: todo aquí mismo.',
     items: [
       { title: 'Elige tu plan', text: 'Básico o Permanente, aquí mismo.' },
-      { title: 'Paga con tarjeta', text: 'Un checkout seguro de Stripe. duokit nunca ve tu tarjeta.' },
-      { title: 'Entra y descarga', text: 'En cuanto Stripe confirma el cobro, tu cuenta ya está lista, ahí mismo en la pantalla.' },
+      { title: 'Paga con tarjeta', text: 'Un checkout seguro de Mercado Pago. duokit nunca ve tu tarjeta.' },
+      { title: 'Entra y descarga', text: 'En cuanto Mercado Pago confirma el cobro, tu cuenta ya está lista, ahí mismo en la pantalla.' },
     ],
   },
   plans: {
@@ -72,8 +72,8 @@ export default {
   faq: {
     heading: 'Preguntas frecuentes',
     items: [
-      { q: '¿Cómo pago?', a: 'Con tarjeta, por un checkout seguro de Stripe. Elige tu plan, paga, y tu cuenta queda lista en la misma pantalla.' },
-      { q: '¿Cuánto tarda en activarse mi cuenta?', a: 'Segundos: en cuanto Stripe confirma el cobro, ves tu usuario y contraseña ahí mismo, sin que nadie confirme nada a mano.' },
+      { q: '¿Cómo pago?', a: 'Con tarjeta, por un checkout seguro de Mercado Pago. Elige tu plan, paga, y tu cuenta queda lista en la misma pantalla.' },
+      { q: '¿Cuánto tarda en activarse mi cuenta?', a: 'Segundos: en cuanto Mercado Pago confirma el cobro, ves tu usuario y contraseña ahí mismo, sin que nadie confirme nada a mano.' },
       { q: '¿Puedo entrar desde varios dispositivos?', a: 'Sí, hasta 2 sesiones abiertas a la vez con la misma cuenta. Si abres una tercera, se cierra la más antigua.' },
       { q: '¿Hay reembolsos?', a: 'Las compras son finales: no hay reembolso por cambio de opinión ni por no usar tu acceso. Sí hay reembolso si el servicio falla por nuestra culpa (por ejemplo, se cae el sistema). Escríbenos y lo resolvemos.' },
       { q: '¿Qué pasa cuando vence el plan Básico?', a: 'Tu acceso termina en la fecha indicada. Para seguir, compra de nuevo con el mismo correo: la renovación suma 30 días a tu cuenta.' },
@@ -247,7 +247,7 @@ export default {
           {
             h: '1. El servicio',
             p: [
-              'duokit es una herramienta para descargar de YouTube video, audio (MP3) y miniaturas desde tu navegador. Se contrata en este sitio y se paga con tarjeta a través de Stripe. Al pagar o usar duokit aceptas estos términos.',
+              'duokit es una herramienta para descargar de YouTube video, audio (MP3) y miniaturas desde tu navegador. Se contrata en este sitio y se paga con tarjeta a través de Mercado Pago. Al pagar o usar duokit aceptas estos términos.',
             ],
           },
           {
@@ -310,9 +310,9 @@ export default {
           {
             h: 'Qué datos guardamos',
             p: [
-              'Tu correo y el nombre que das al pagar (Stripe los recoge al cobrar y nos los pasa).',
+              'Tu correo y el nombre que das al pagar (Mercado Pago los recoge al cobrar y nos los pasa).',
               'Los de tu cuenta: usuario (lo generamos nosotros), nombre, plan, fecha de vencimiento y tu contraseña, que se guarda cifrada (nunca en texto claro).',
-              'Los de tus pagos: referencia, plan, monto y fechas. Los datos de tu tarjeta los pide y los procesa Stripe directamente: nosotros nunca los vemos ni los guardamos.',
+              'Los de tus pagos: referencia, plan, monto y fechas. Los datos de tu tarjeta los pide y los procesa Mercado Pago directamente: nosotros nunca los vemos ni los guardamos.',
               'Los de tu uso: fecha y dirección IP de tus inicios de sesión y de cada descarga, con el enlace del video y la calidad elegida. No guardamos los archivos que descargas.',
             ],
           },
@@ -325,7 +325,7 @@ export default {
           {
             h: 'Con quién los compartimos',
             p: [
-              'No vendemos tus datos. Los compartimos solo con quien hace falta para operar: Stripe, que procesa tu pago (ellos manejan tu tarjeta y tu correo, con sus propias reglas de privacidad). Los entregaremos si una autoridad competente nos lo exige.',
+              'No vendemos tus datos. Los compartimos solo con quien hace falta para operar: Mercado Pago, que procesa tu pago (ellos manejan tu tarjeta y tu correo, con sus propias reglas de privacidad). Los entregaremos si una autoridad competente nos lo exige.',
             ],
           },
           {

@@ -1,5 +1,5 @@
 # Imagen para un hospedaje por contenedor (Railway y similares). Un solo servicio: el backend de Node sirve la API
-# (con el webhook de Stripe) y el frontend ya compilado (dist/) — no hay nginx delante, el propio Railway hace de proxy.
+# (con el webhook de Mercado Pago) y el frontend ya compilado (dist/) — no hay nginx delante, el propio Railway hace de proxy.
 #
 # NO PROBADO con `docker build` de verdad (este entorno no tenía acceso al demonio de Docker). Sí está probado por
 # separado: el backend sirviendo un frontend compilado (test/static.test.js y una prueba manual con curl) y que

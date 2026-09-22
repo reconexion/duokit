@@ -1,4 +1,4 @@
-// Recibo en PDF, generado al vuelo y descargable desde la pantalla de "pago exitoso" (GET /api/receipt/:sessionId).
+// Recibo en PDF, generado al vuelo y descargable desde la pantalla de "pago exitoso" (GET /api/receipt/:checkoutToken).
 const PDFDocument = require('pdfkit');
 const { PLANS, money } = require('./plans');
 const { SELLER, PUBLIC_URL } = require('./config');

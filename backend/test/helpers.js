@@ -1,13 +1,12 @@
 // Utilidades para las pruebas: levantan el backend real en un puerto libre, con datos temporales,
-// un yt-dlp falso (sin red) y, si se pide, un Stripe falso. Nada toca backend/data.
+// un yt-dlp falso (sin red) y, si se pide, un Mercado Pago falso. Nada toca backend/data.
 const { spawn, execFileSync } = require('node:child_process');
+const crypto = require('node:crypto');
 const fs = require('node:fs');
 const http = require('node:http');
 const net = require('node:net');
 const os = require('node:os');
 const path = require('node:path');
-const qs = require('qs');
-const Stripe = require('stripe');
 
 const BACKEND = path.join(__dirname, '..');
 
@@ -36,7 +35,7 @@ const freePort = () =>
     });
   });
 
-async function startServer(extraEnv = {}, { dist, stripe } = {}) {
+async function startServer(extraEnv = {}, { dist, mercadopago } = {}) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'duokit-test-'));
   if (dist) {
     fs.mkdirSync(path.join(root, 'dist'));
@@ -54,14 +53,17 @@ async function startServer(extraEnv = {}, { dist, stripe } = {}) {
     PORT: String(port),
     PATH: `${bin}:${process.env.PATH}`,
     FAKE_DIR: root,
-    // Si la prueba pasa un Stripe falso (startFakeStripeApi), el backend le habla a él en vez de a la API real.
-    ...(stripe
+    // Por defecto SIEMPRE se anulan: config.js carga backend/.env con process.loadEnvFile, que solo rellena
+    // variables que el proceso no traiga ya puestas — así que sin esto, cualquier prueba heredaría sin querer las
+    // credenciales REALES de backend/.env (si alguien ya las configuró ahí) y llamaría a la API de verdad. Si la
+    // prueba pasa un Mercado Pago falso (startFakeMercadoPagoApi), se usan credenciales de prueba en su lugar.
+    MERCADOPAGO_ACCESS_TOKEN: '',
+    MERCADOPAGO_WEBHOOK_SECRET: '',
+    ...(mercadopago
       ? {
-          STRIPE_SECRET_KEY: 'sk_test_fake',
-          STRIPE_WEBHOOK_SECRET: STRIPE_TEST_WEBHOOK_SECRET,
-          STRIPE_API_HOST: stripe.host,
-          STRIPE_API_PORT: String(stripe.port),
-          STRIPE_API_PROTOCOL: stripe.protocol,
+          MERCADOPAGO_ACCESS_TOKEN: 'TEST-fake',
+          MERCADOPAGO_WEBHOOK_SECRET: MERCADOPAGO_TEST_WEBHOOK_SECRET,
+          MERCADOPAGO_API_BASE_URL: `${mercadopago.protocol}://${mercadopago.host}:${mercadopago.port}`,
         }
       : {}),
     ...extraEnv,
@@ -142,13 +144,15 @@ async function waitJob(api, jobId, timeoutMs = 15000) {
   }
 }
 
-const STRIPE_TEST_WEBHOOK_SECRET = 'whsec_test_secret';
+const MERCADOPAGO_TEST_WEBHOOK_SECRET = 'test_secret_de_prueba';
 
-// Stripe falso: solo atiende lo que NUESTRO backend le pide a la API de Stripe (crear y consultar una sesión de
-// Checkout). El webhook que Stripe manda DE VUELTA (cuando alguien paga) es una entrega aparte, no pasa por aquí:
-// se simula con fireStripeWebhook, firmado en local con el mismo secreto, tal como lo verifica server.js de verdad.
-async function startFakeStripeApi() {
-  const sessions = new Map();
+// Mercado Pago falso: solo atiende lo que NUESTRO backend le pide a su API (crear una preferencia, consultar un
+// pago). El webhook que Mercado Pago manda DE VUELTA (cuando alguien paga) es una entrega aparte, no pasa por
+// aquí: se simula con fireMercadoPagoWebhook, firmado en local con el mismo secreto, tal como lo verifica
+// server.js de verdad (con el validador oficial del SDK, mercadopago-checkout.js).
+async function startFakeMercadoPagoApi() {
+  const preferences = new Map();
+  const payments = new Map();
   let n = 0;
   const server = http.createServer(async (req, res) => {
     const chunks = [];
@@ -157,30 +161,27 @@ async function startFakeStripeApi() {
       res.writeHead(status, { 'content-type': 'application/json' });
       res.end(JSON.stringify(body));
     };
-    if (req.method === 'POST' && req.url === '/v1/checkout/sessions') {
-      const body = qs.parse(Buffer.concat(chunks).toString());
-      const id = `cs_test_${++n}`;
-      const session = {
+    const url = new URL(req.url, 'http://fake-mercadopago.test');
+    if (req.method === 'POST' && url.pathname === '/checkout/preferences') {
+      const body = JSON.parse(Buffer.concat(chunks).toString() || '{}');
+      const id = `pref_test_${++n}`;
+      const preference = {
         id,
-        object: 'checkout.session',
-        url: `http://fake-stripe.test/pay/${id}`,
-        status: 'open',
-        payment_status: 'unpaid',
-        client_reference_id: body.client_reference_id ?? null,
-        metadata: body.metadata ?? {},
-        amount_total: Number(body.line_items?.[0]?.price_data?.unit_amount ?? 0),
-        currency: body.line_items?.[0]?.price_data?.currency ?? 'mxn',
+        init_point: `http://fake-mercadopago.test/pay/${id}`,
+        external_reference: body.external_reference ?? null,
+        items: body.items ?? [],
+        back_urls: body.back_urls ?? {},
       };
-      sessions.set(id, session);
-      return send(200, session);
+      preferences.set(id, preference);
+      return send(201, preference);
     }
-    const match = req.method === 'GET' && /^\/v1\/checkout\/sessions\/([^/?]+)/.exec(req.url);
+    const match = req.method === 'GET' && /^\/v1\/payments\/([^/?]+)/.exec(url.pathname);
     if (match) {
-      const session = sessions.get(match[1]);
-      if (!session) return send(404, { error: { message: 'No such checkout session', type: 'invalid_request_error' } });
-      return send(200, session);
+      const payment = payments.get(match[1]);
+      if (!payment) return send(404, { message: 'Payment not found' });
+      return send(200, payment);
     }
-    send(404, { error: { message: 'not found', type: 'invalid_request_error' } });
+    send(404, { message: 'not found' });
   });
   await new Promise((resolve) => server.listen(0, resolve));
   const { port } = server.address();
@@ -188,30 +189,46 @@ async function startFakeStripeApi() {
     host: 'localhost',
     port,
     protocol: 'http',
-    sessions,
-    // Como si el cliente ya hubiera pagado en Stripe (antes de que llegue el webhook que de verdad activa la cuenta).
-    // email/name son lo que Stripe recoge al cobrar (billing_address_collection): así llegan en customer_details.
-    markComplete: (id, { email = 'cliente@example.com', name = 'Cliente de Prueba' } = {}) =>
-      Object.assign(sessions.get(id), { status: 'complete', payment_status: 'paid', customer_details: { email, name } }),
+    preferences,
+    payments,
+    // Como si el cliente ya hubiera pagado en Mercado Pago (antes de que llegue el webhook que de verdad activa la
+    // cuenta). email/first_name/last_name son lo que Mercado Pago recoge en su checkout hospedado. Devuelve el id
+    // del pago (lo que trae la notificación real: data.id), no el de la preferencia.
+    approve: (preferenceId, { email = 'cliente@example.com', firstName = 'Cliente', lastName = 'De Prueba' } = {}) => {
+      const preference = preferences.get(preferenceId);
+      const paymentId = `pay_test_${++n}`;
+      payments.set(paymentId, {
+        id: paymentId,
+        status: 'approved',
+        status_detail: 'accredited',
+        external_reference: preference.external_reference,
+        transaction_amount: preference.items?.[0]?.unit_price ?? null,
+        payer: { email, first_name: firstName, last_name: lastName },
+      });
+      return paymentId;
+    },
     stop: () => server.close(),
   };
 }
 
-// Firma y manda un webhook checkout.session.completed directo al backend bajo prueba, exactamente como lo verifica
-// server.js (Stripe.webhooks.generateTestHeaderString firma en local, sin red, con el mismo algoritmo que Stripe usa
-// de verdad). `secret` debe coincidir con STRIPE_WEBHOOK_SECRET del servidor, o la firma sale inválida a propósito.
-async function fireStripeWebhook(server, session, { secret = STRIPE_TEST_WEBHOOK_SECRET, type = 'checkout.session.completed' } = {}) {
-  const payload = JSON.stringify({
-    id: `evt_test_${Math.random().toString(36).slice(2)}`,
-    object: 'event',
-    type,
-    data: { object: session },
-  });
-  const header = Stripe.webhooks.generateTestHeaderString({ payload, secret });
-  const res = await fetch(`${server.base}/api/webhook/stripe`, {
+// Firma y manda una notificación de pago directo al backend bajo prueba, con el mismo formato de manifest y HMAC-
+// SHA256 que WebhookSignatureValidator (del SDK oficial) verifica de verdad en server.js — ver el propio código del
+// validador (node_modules/mercadopago/dist/utils/webhook) para el detalle exacto del manifest.
+// `secret` debe coincidir con MERCADOPAGO_WEBHOOK_SECRET del servidor, o la firma sale inválida a propósito.
+async function fireMercadoPagoWebhook(server, paymentId, { secret = MERCADOPAGO_TEST_WEBHOOK_SECRET, type = 'payment' } = {}) {
+  const ts = Math.floor(Date.now() / 1000);
+  const requestId = crypto.randomUUID();
+  const manifest = `id:${paymentId};request-id:${requestId};ts:${ts};`;
+  const hash = crypto.createHmac('sha256', secret).update(manifest).digest('hex');
+  const body = JSON.stringify({ action: 'payment.updated', type, data: { id: String(paymentId) } });
+  const res = await fetch(`${server.base}/api/webhook/mercadopago?data.id=${encodeURIComponent(paymentId)}&type=${type}`, {
     method: 'POST',
-    headers: { 'content-type': 'application/json', 'stripe-signature': header },
-    body: payload,
+    headers: {
+      'content-type': 'application/json',
+      'x-signature': `ts=${ts},v1=${hash}`,
+      'x-request-id': requestId,
+    },
+    body,
   });
   const text = await res.text();
   let json = null;
@@ -223,4 +240,13 @@ async function fireStripeWebhook(server, session, { secret = STRIPE_TEST_WEBHOOK
   return { status: res.status, json, text };
 }
 
-module.exports = { startServer, addUser, client, sleep, waitJob, startFakeStripeApi, fireStripeWebhook, STRIPE_TEST_WEBHOOK_SECRET };
+module.exports = {
+  startServer,
+  addUser,
+  client,
+  sleep,
+  waitJob,
+  startFakeMercadoPagoApi,
+  fireMercadoPagoWebhook,
+  MERCADOPAGO_TEST_WEBHOOK_SECRET,
+};

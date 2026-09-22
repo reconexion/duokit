@@ -60,7 +60,7 @@ router.get('/summary', (req, res) => {
   });
 });
 
-// Respaldo de emergencia: normalmente Stripe confirma solo, por el webhook. Esto es solo por si algún día falla.
+// Respaldo de emergencia: normalmente Mercado Pago confirma solo, por el webhook. Esto es solo por si algún día falla.
 router.post('/payments/:reference/confirm', async (req, res) => {
   try {
     const result = await billing.confirm(req.params.reference, `admin:${req.user.username}`);

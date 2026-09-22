@@ -1,6 +1,6 @@
-// Activación de cuentas al confirmar un pago (por Stripe, o a mano de emergencia). Crea el usuario (o renueva el
-// existente) según el correo que Stripe recogió al cobrar — es el único identificador estable que tenemos del
-// cliente ahora que no hay Telegram.
+// Activación de cuentas al confirmar un pago (por Mercado Pago, o a mano de emergencia). Crea el usuario (o renueva
+// el existente) según el correo que Mercado Pago recogió al cobrar — es el único identificador estable que tenemos
+// del cliente ahora que no hay Telegram.
 const auth = require('./auth');
 const audit = require('./audit');
 const payments = require('./payments');
@@ -57,7 +57,7 @@ async function activate(payment) {
   return { user, created: true, password, accessUntil };
 }
 
-// Confirma un pago pendiente: activa la cuenta. `extra` (email, payerName) es lo que Stripe recogió al cobrar —
+// Confirma un pago pendiente: activa la cuenta. `extra` (email, payerName) es lo que Mercado Pago recogió al cobrar —
 // solo lo trae el webhook; una confirmación manual de emergencia (/confirmar) no tiene nada que darle.
 const confirm = (reference, by = 'admin', extra = {}) => serialized(() => confirmNow(reference, by, extra));
 
