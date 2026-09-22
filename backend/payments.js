@@ -35,6 +35,21 @@ function nextReference(list) {
 
 const normalizeReference = (ref) => String(ref || '').trim().toUpperCase();
 
+// Lo que el cliente escribe en el concepto de la transferencia: la referencia y su nombre ("DUO-2026-001 MARIA LOPEZ"),
+// para reconocerlo de un vistazo en el estado de cuenta. Los bancos suelen aceptar en el concepto solo letras y números
+// sin acentos y hasta 40 caracteres, así que el nombre se normaliza y el conjunto se recorta a ese largo.
+// La referencia en sí (DUO-AAAA-NNN) no cambia: es el identificador que usan los botones y /confirmar.
+function paymentConcept(payment) {
+  const name = String(payment.payerName || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toUpperCase()
+    .replace(/[^A-Z0-9 ]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+  return `${payment.reference} ${name}`.trim().slice(0, 40).trim();
+}
+
 const get = (reference) => read().find((p) => p.reference === normalizeReference(reference)) || null;
 const list = () => read();
 
@@ -78,4 +93,4 @@ const knownName = (telegramId) => read().filter((p) => p.telegramId === String(t
 
 const revenue = () => read().filter((p) => p.status === 'paid').reduce((sum, p) => sum + p.amount, 0);
 
-module.exports = { create, get, list, update, revenue, knownName, normalizeReference };
+module.exports = { create, get, list, update, revenue, knownName, normalizeReference, paymentConcept };

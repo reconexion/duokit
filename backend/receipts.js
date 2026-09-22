@@ -2,6 +2,7 @@
 const PDFDocument = require('pdfkit');
 const { PLANS, money } = require('./plans');
 const { SELLER, PUBLIC_URL } = require('./config');
+const { paymentConcept } = require('./payments');
 
 const GREEN = '#099250';
 const INK = '#181d27';
@@ -76,7 +77,7 @@ function buildReceipt(payment, status = payment.status === 'paid' ? 'paid' : 'pe
       .font('Helvetica')
       .fontSize(10.5)
       .text(
-        `Transfiere ${money(payment.amount)} por SPEI a la ${SELLER.accountLabel} ${SELLER.account} y escribe la referencia ${payment.reference} en el concepto. ` +
+        `Transfiere ${money(payment.amount)} por SPEI a la ${SELLER.accountLabel} ${SELLER.account} y escribe en el concepto tu referencia completa, tal cual: ${paymentConcept(payment)}. ` +
           'Cuando confirmemos tu pago recibirás tu usuario y contraseña por Telegram.',
         left + 16,
         y + 34,

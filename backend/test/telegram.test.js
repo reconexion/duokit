@@ -30,6 +30,9 @@ after(() => {
 test('venta completa y solo el administrador (fijado por ID) puede confirmar, con el monto correcto', async () => {
   tg.say(admin, '/start');
   await tg.replies();
+  // El menú con /resumen, /pendientes y /confirmar solo lo ve el administrador, en su chat; el público no lo trae.
+  assert.ok(tg.menus.some((m) => m.scope === 1 && ['resumen', 'pendientes', 'confirmar'].every((c) => m.commands.includes(c))), 'menú del administrador');
+  assert.ok(tg.menus.some((m) => m.scope === null && !m.commands.includes('resumen') && !m.commands.includes('confirmar')), 'menú público sin comandos de admin');
 
   tg.say(customer, '/comprar');
   tg.tap(customer, 'buy:basic');
@@ -37,6 +40,8 @@ test('venta completa y solo el administrador (fijado por ID) puede confirmar, co
   const purchase = await tg.replies(1200);
   assert.match(said(purchase, 500), new RegExp(REF));
   assert.match(said(purchase, 500), /no hay reembolsos/i, 'el cliente debe ver que no hay reembolsos antes de pagar');
+  assert.match(said(purchase, 500), new RegExp(`con referencia: ${REF} MARIA LOPEZ RUIZ`), 'la referencia lleva el nombre del cliente');
+  assert.match(said(purchase, 1), new RegExp(`En el banco debe aparecer: ${REF} MARIA LOPEZ RUIZ`), 'el admin sabe qué concepto buscar');
   assert.match(said(purchase, 1), /Pago pendiente/);
 
   // Alguien con el mismo @usuario pero otro ID no es el administrador.
@@ -84,6 +89,23 @@ test('otro cliente no puede tocar el pago de alguien más', async () => {
   tg.tap(other, `cancel:${ref}`);
   assert.match(said(await tg.replies(), 700), /No encontré/);
   assert.equal(srv.run(`console.log(require('./payments').get('${ref}').status)`), 'pending');
+});
+
+test('/resumen le muestra al administrador cuántos faltan y cuántos ya activó, y nadie más puede verlo', async () => {
+  tg.say(admin, '/resumen');
+  const summary = said(await tg.replies(), 1);
+  assert.match(summary, /POR ACTIVAR: 1/);
+  assert.match(summary, new RegExp(`DUO-${YEAR}-002 · Permanente`));
+  assert.match(summary, /María López Ruiz \(@maria_c\)/);
+  assert.match(summary, /Hoy: 1 · \$129\.00 MXN/);
+  assert.match(summary, /Total: 1 · \$129\.00 MXN \(Básico 1 · Permanente 0\)/);
+  assert.match(summary, /Activos: 1/);
+
+  tg.say(customer, '/resumen');
+  tg.say(impostor, '/resumen');
+  const denied = await tg.replies();
+  assert.match(said(denied, 500), /No entendí/);
+  assert.match(said(denied, 2), /No entendí/);
 });
 
 test('si varias descargas seguidas fallan por YouTube/yt-dlp, el administrador recibe un aviso (y otro al recuperarse)', async () => {

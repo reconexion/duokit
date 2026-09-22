@@ -31,13 +31,22 @@ npm start                                # backend en :3001 + Vite en :5173
 ### 2. Flujo de una venta
 1. El cliente escribe `/comprar` y elige plan. La primera vez el bot le pide su **nombre completo** (como aparece en su banco);
    así, en tu estado de cuenta reconoces quién pagó. Ese nombre es el que se muestra en su cuenta y en el recibo. Después el bot le da la referencia (`DUO-2026-001`, `-002`...) con el texto
-   *"Transfiere $129.00 MXN a esta tarjeta de débito: <tu cuenta> con referencia: DUO-2026-001"* y su **recibo en PDF**.
+   *"Transfiere $129.00 MXN a esta tarjeta de débito: <tu cuenta> con referencia: DUO-2026-001 JUAN PEREZ"* y su **recibo en PDF**.
+   La referencia lleva **su nombre** (sin acentos ni símbolos y en máximo 40 caracteres, como aceptan los bancos en el concepto), así
+   en tu estado de cuenta ves de un vistazo quién pagó. El identificador interno sigue siendo `DUO-2026-001` (es el que usas en `/confirmar`).
 2. Te llega un aviso por Telegram ("Pago pendiente", con su nombre y su @usuario) y aparece en `/admin`. Si el cliente toca "Ya pagué", te avisa otra vez.
 3. Cuando ves la transferencia, la confirmas: botón **Confirmar** en `/admin` o `/confirmar DUO-2026-001 129` en el bot
    (el monto es lo que te llegó al banco; si no coincide con el del plan, el bot no activa nada).
 4. Se crea el usuario (o se renueva el existente), y el cliente recibe usuario, contraseña y el recibo pagado por Telegram.
 
-Comandos del bot: `/comprar` `/estado` `/recuperar` (contraseña nueva) `/ayuda`. Del administrador: `/pendientes` `/confirmar REF MONTO`.
+Comandos del bot: `/comprar` `/estado` `/recuperar` (contraseña nueva) `/ayuda`. Del administrador (menú solo en tu chat): `/resumen` `/pendientes` `/confirmar REF MONTO`.
+
+### Comandos del administrador
+
+- `/resumen` — el panorama de un vistazo: **por activar** (cuántos, cuánto dinero está por cobrar, quién dice que ya pagó y hace cuánto),
+  **activados** (hoy, este mes y total, por plan, y los últimos 5) y clientes (activos, los que vencen en 7 días o menos, bloqueados).
+- `/pendientes` — la lista completa de pagos pendientes, con el concepto que debes buscar en el banco.
+- `/confirmar REFERENCIA MONTO` — activa el pago cuando ves la transferencia.
 
 ## Planes y límites
 

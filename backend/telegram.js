@@ -6,6 +6,7 @@ const config = require('./config');
 const auth = require('./auth');
 const billing = require('./billing');
 const payments = require('./payments');
+const report = require('./report');
 const { buildReceipt } = require('./receipts');
 const { PLANS, money } = require('./plans');
 
@@ -82,6 +83,21 @@ const HELP_TEXT = `Hola, soy el bot de duokit: descarga videos, audio y miniatur
 /recuperar — generar una contraseña nueva
 
 Pagas por transferencia (SPEI) y en cuanto confirmamos tu pago te llegan tu usuario y contraseña por aquí.`;
+
+// Menú de comandos de Telegram. El administrador ve además los suyos, solo en su chat privado.
+const PUBLIC_COMMANDS = [
+  { command: 'comprar', description: 'Ver los planes y comprar' },
+  { command: 'estado', description: 'Ver mi plan y mi acceso' },
+  { command: 'recuperar', description: 'Generar una contraseña nueva' },
+  { command: 'ayuda', description: 'Cómo funciona' },
+];
+const ADMIN_COMMANDS = [
+  { command: 'resumen', description: 'Pagos por activar y ya activados' },
+  { command: 'pendientes', description: 'Lista de pagos pendientes' },
+  { command: 'confirmar', description: 'Activar un pago: REFERENCIA MONTO' },
+];
+const publishAdminCommands = (chatId) =>
+  call('setMyCommands', { commands: [...ADMIN_COMMANDS, ...PUBLIC_COMMANDS], scope: { type: 'chat', chat_id: chatId } }).catch(() => {});
 
 const PLAN_KEYBOARD = {
   inline_keyboard: [
@@ -214,11 +230,11 @@ async function startBuy(chatId, from, planId, givenName) {
   await sendMessage(
     chatId,
     [
-      `Tu referencia: ${payment.reference}`,
-      `Cliente: ${payment.payerName}`,
+      `Tu referencia: ${payments.paymentConcept(payment)}`,
       `Plan: ${plan.name} — ${money(payment.amount)}`,
       '',
-      `Transfiere ${money(payment.amount)} a esta ${config.SELLER.accountLabel}: ${config.SELLER.account} con referencia: ${payment.reference}`,
+      `Transfiere ${money(payment.amount)} a esta ${config.SELLER.accountLabel}: ${config.SELLER.account} con referencia: ${payments.paymentConcept(payment)}`,
+      'Escribe la referencia completa, con tu nombre, en el concepto de la transferencia, tal cual.',
       '',
       'Te mando tu recibo en PDF. Cuando hagas la transferencia toca "Ya pagué" y lo revisamos.',
       `Recuerda: las compras son finales (no hay reembolsos). Términos: ${config.PUBLIC_URL}/legal`,
@@ -240,6 +256,7 @@ async function startBuy(chatId, from, planId, givenName) {
         '🕒 Pago pendiente',
         `${payment.reference} · ${plan.name} · ${money(payment.amount)}`,
         `Cliente: ${describe(payment)}`,
+        `En el banco debe aparecer: ${payments.paymentConcept(payment)}`,
         '',
         `Cuando llegue la transferencia: /confirmar ${payment.reference} ${payment.amount}`,
       ].join('\n'),
@@ -258,6 +275,7 @@ async function reportPaid(chatId, from, reference) {
       '💰 El cliente dice que ya pagó',
       `${payment.reference} · ${PLANS[payment.plan].name} · ${money(payment.amount)}`,
       `Cliente: ${describe(payment)}`,
+      `En el banco debe aparecer: ${payments.paymentConcept(payment)}`,
       '',
       `Si ya llegó la transferencia: /confirmar ${payment.reference} ${payment.amount}`,
     ].join('\n'),
@@ -294,13 +312,14 @@ async function resetPassword(chatId, from) {
 
 // Solo el administrador (@tostilocos)
 async function adminCommand(chatId, command, arg) {
+  if (command === '/resumen') return sendMessage(chatId, report.formatSummary(report.summarize()));
   if (command === '/pendientes') {
     const pending = payments.list().filter((p) => p.status === 'pending');
     if (pending.length === 0) return sendMessage(chatId, 'No hay pagos pendientes.');
     return sendMessage(
       chatId,
       pending
-        .map((p) => `${p.reference} · ${PLANS[p.plan].name} · ${money(p.amount)} · ${describe(p)}${p.reportedAt ? ' · dice que ya pagó' : ''}`)
+        .map((p) => `${payments.paymentConcept(p)} · ${PLANS[p.plan].name} · ${money(p.amount)} · ${describe(p)}${p.reportedAt ? ' · dice que ya pagó' : ''}`)
         .join('\n') + '\n\nPara activar: /confirmar REFERENCIA MONTO',
     );
   }
@@ -355,6 +374,7 @@ async function handleMessage(message) {
   if (admin && state.adminChatId !== chatId) {
     state.adminChatId = chatId;
     saveState();
+    publishAdminCommands(chatId);
   }
 
   // Si el bot está esperando el nombre para generar la referencia, lo siguiente que escriba es ese nombre.
@@ -377,13 +397,13 @@ async function handleMessage(message) {
 
   if (command === '/start' || command === '/ayuda' || command === '/help') {
     await sendMessage(chatId, HELP_TEXT);
-    if (admin) await sendMessage(chatId, 'Eres el administrador: te avisaré aquí de cada pago pendiente.\n\n/pendientes — ver pagos pendientes\n/confirmar REFERENCIA MONTO — activar a un cliente (el monto es lo que te llegó al banco)');
+    if (admin) await sendMessage(chatId, 'Eres el administrador: te avisaré aquí de cada pago pendiente.\n\n/resumen — cuántos faltan por activar y cuántos ya activaste\n/pendientes — lista de pagos pendientes\n/confirmar REFERENCIA MONTO — activar a un cliente (el monto es lo que te llegó al banco)');
     return;
   }
   if (command === '/comprar') return sendMessage(chatId, PLANS_TEXT, { reply_markup: PLAN_KEYBOARD });
   if (command === '/estado') return sendMessage(chatId, statusText(from));
   if (command === '/recuperar') return resetPassword(chatId, from);
-  if (admin && (command === '/pendientes' || command === '/confirmar')) return adminCommand(chatId, command, arg);
+  if (admin && ['/resumen', '/pendientes', '/confirmar'].includes(command)) return adminCommand(chatId, command, arg);
   return sendMessage(chatId, 'No entendí ese mensaje. Usa /comprar para ver los planes o /estado para ver tu acceso.');
 }
 
@@ -442,14 +462,8 @@ async function start() {
   try {
     const me = await call('getMe');
     console.log(`Bot de Telegram activo: @${me.username}`);
-    await call('setMyCommands', {
-      commands: [
-        { command: 'comprar', description: 'Ver los planes y comprar' },
-        { command: 'estado', description: 'Ver mi plan y mi acceso' },
-        { command: 'recuperar', description: 'Generar una contraseña nueva' },
-        { command: 'ayuda', description: 'Cómo funciona' },
-      ],
-    }).catch(() => {});
+    await call('setMyCommands', { commands: PUBLIC_COMMANDS }).catch(() => {});
+    if (state.adminChatId) await publishAdminCommands(state.adminChatId);
   } catch (err) {
     console.error(`Telegram desactivado: ${err.message}. Revisa el token.`);
     return;

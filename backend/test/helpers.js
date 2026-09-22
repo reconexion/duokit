@@ -132,6 +132,7 @@ async function waitJob(api, jobId, timeoutMs = 15000) {
 async function startFakeTelegram() {
   const queue = [];
   const sent = [];
+  const menus = []; // menús de comandos publicados: { scope: chat_id | null, commands: [...] }
   let updateId = 100;
   const server = http.createServer(async (req, res) => {
     const chunks = [];
@@ -148,6 +149,10 @@ async function startFakeTelegram() {
       const pending = queue.filter((u) => u.update_id >= offset);
       return pending.length ? reply(pending) : setTimeout(() => reply([]), 200);
     }
+    if (method === 'setMyCommands') {
+      const p = JSON.parse(raw);
+      menus.push({ scope: p.scope?.chat_id ?? null, commands: p.commands.map((c) => c.command) });
+    }
     if (method === 'sendMessage') {
       const p = JSON.parse(raw);
       sent.push({ to: Number(p.chat_id), text: p.text });
@@ -160,6 +165,7 @@ async function startFakeTelegram() {
   const from = (id, username) => ({ id, username, first_name: username || 'Cliente', is_bot: false });
   return {
     url: `http://localhost:${server.address().port}`,
+    menus,
     from,
     say: (user, text) => queue.push({ update_id: ++updateId, message: { chat: { id: user.id, type: 'private' }, from: user, text } }),
     tap: (user, data) =>
