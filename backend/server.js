@@ -19,8 +19,11 @@ const crypto = require('crypto');
 const os = require('os');
 
 const PORT = Number(process.env.PORT) || 3001;
-// Solo escucha en este equipo: al público lo atiende el proxy (nginx) o el proxy de Vite. Para exponerlo directamente: HOST=0.0.0.0.
-const HOST = process.env.HOST || '127.0.0.1';
+// Solo escucha en este equipo por defecto: al público lo atiende el proxy (nginx) o el proxy de Vite. Para
+// exponerlo directamente pon HOST=0.0.0.0 (documentado en deploy/RAILWAY.md y deploy/README.md) — y, como
+// respaldo por si esa variable queda sin poner, el propio Dockerfile ya fija NODE_ENV=production (ver Dockerfile),
+// así que en un contenedor este default cambia solo a 0.0.0.0; en local (npm start, sin NODE_ENV) sigue en 127.0.0.1.
+const HOST = process.env.HOST || (process.env.NODE_ENV === 'production' ? '0.0.0.0' : '127.0.0.1');
 
 // Los archivos no se guardan en el proyecto: yt-dlp los prepara en una carpeta temporal fuera de él,
 // el navegador los recibe como una descarga normal y se borran solos pasado FILE_TTL_MS.
