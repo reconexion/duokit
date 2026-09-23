@@ -7,3 +7,4 @@ dist
 *.pid
 backups/
 helper/dist/
+helper/vendor/

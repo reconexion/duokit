@@ -103,9 +103,25 @@ function findOnPath(command) {
   return stdout.toString().trim().split(/\r?\n/)[0] || null;
 }
 
+// yt-dlp.exe/ffmpeg.exe vienen empacados DENTRO del instalador de Windows (helper/vendor/win32/, bajados con
+// fetch-vendor.sh antes de construirlo) — así el Asistente nunca necesita "descargar y ejecutar otro programa de
+// internet" al abrirse por primera vez, que es justo el patrón que los antivirus marcan como sospechoso (un
+// cliente reportó tener que desactivar el suyo para poder usarlo). Empacado con pkg (ver package.json → pkg.assets),
+// que dentro del ejecutable actúa como un archivo normal para fs.existsSync/copyFileSync.
+function copyBundled(name, dest) {
+  const bundled = path.join(__dirname, 'vendor', process.platform, name);
+  if (!fs.existsSync(bundled)) return false;
+  fs.copyFileSync(bundled, dest);
+  return true;
+}
+
 async function ensureYtDlp() {
   const dest = path.join(BIN_DIR, `yt-dlp${EXE}`);
   if (fs.existsSync(dest)) return dest;
+  if (copyBundled(`yt-dlp${EXE}`, dest)) {
+    if (process.platform !== 'win32') fs.chmodSync(dest, 0o755);
+    return dest;
+  }
   const onPath = findOnPath('yt-dlp');
   if (onPath) return onPath;
   if (!YTDLP_URL) throw new Error(`Sistema operativo no soportado: ${process.platform}.`);
@@ -179,6 +195,10 @@ async function extractSingleFileFromTar(tarPath, targetName, destPath) {
 async function ensureFfmpeg() {
   const dest = path.join(BIN_DIR, `ffmpeg${EXE}`);
   if (fs.existsSync(dest)) return dest;
+  if (copyBundled(`ffmpeg${EXE}`, dest)) {
+    if (process.platform !== 'win32') fs.chmodSync(dest, 0o755);
+    return dest;
+  }
   const onPath = findOnPath('ffmpeg');
   if (onPath) return onPath;
   console.log('Descargando ffmpeg (una sola vez, puede tardar un poco)...');
