@@ -221,6 +221,7 @@ export default {
     checking: 'Comprobando el Asistente de duokit...',
     gateTitle: 'Activa la descarga rápida',
     gateText: 'Para descargar necesitas el Asistente de duokit: un programa chiquito, gratis, que se instala una sola vez y hace que tus descargas salgan directo desde tu compu — más rápido y sin esperar tu turno.',
+    macComingSoon: 'El Asistente para Mac está en camino. Por ahora, descárgalo para Windows.',
     firstRunNote: 'La primera vez que descargues algo, el Asistente prepara lo que necesita solo (una sola vez); puede tardar un poco más de lo normal.',
     download: 'Descargar para {os}',
     otherOS: 'Otro sistema operativo',

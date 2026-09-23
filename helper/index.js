@@ -193,7 +193,14 @@ async function ensureFfmpeg() {
 const jobs = new Map();
 const activeChildren = new Set();
 
+// En Windows no existen los grupos de procesos estilo POSIX (process.kill(-pid, ...) truena ahí), y child.kill()
+// solo mata al proceso directo (yt-dlp), no a ffmpeg si yt-dlp ya lo había lanzado como hijo suyo — quedaría
+// corriendo huérfano. `taskkill /t` sí mata todo el árbol y viene incluido en Windows, sin nada que instalar.
 function killTree(child) {
+  if (process.platform === 'win32') {
+    require('child_process').spawn('taskkill', ['/pid', String(child.pid), '/T', '/F']);
+    return;
+  }
   try {
     process.kill(-child.pid, 'SIGKILL');
   } catch {

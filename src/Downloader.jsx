@@ -31,11 +31,11 @@ import { useJobPoller } from './useJobPoller';
 const VIDEO_HEIGHTS = { '480p': 480, '720p': 720, '1080p': 1080, '2K': 1440, '4K': 2160 };
 const AUDIO_QUALITY_OPTIONS = ['64k', '128k', '192k', '256k', '320k'].map((id) => ({ id, label: `${id}bps` }));
 const AUDIO_LANG_IDS = ['original', 'es', 'en', 'pt', 'fr', 'de', 'ja', 'ko', 'it', 'ru', 'hi', 'ar'];
-const OS_IDS = ['windows', 'mac-apple-silicon', 'mac-intel', 'linux'];
+// Mac queda fuera de las descargas disponibles a propósito: el instalador existe, pero sin firma de Apple
+// macOS lo mata solo al abrirlo — ofrecerlo se vería como un enlace roto. "Próximamente" en vez de eso.
+const AVAILABLE_OS_IDS = ['windows', 'linux'];
 const OS_LABEL_KEY = {
   windows: 'helper.osWindows',
-  'mac-apple-silicon': 'helper.osMacAppleSilicon',
-  'mac-intel': 'helper.osMacIntel',
   linux: 'helper.osLinux',
 };
 
@@ -102,8 +102,12 @@ function OptionTile({ icon: Icon, title, detail, isSelected, isDisabled, onChang
 // (ver helper/ y backend/download-ticket.js — el servidor sigue decidiendo los límites, el Asistente solo ejecuta).
 function HelperGate({ onRecheck, rechecking }) {
   const { t } = useI18n();
-  const primaryOS = detectOS();
-  const otherOS = OS_IDS.filter((id) => id !== primaryOS);
+  const detected = detectOS();
+  const isMac = detected === 'mac';
+  // En Mac se ofrece Windows como principal (es lo que de verdad funciona hoy) y se avisa que Mac llega después,
+  // en vez de dar un enlace que macOS va a bloquear solo al abrirlo.
+  const primaryOS = isMac ? 'windows' : detected;
+  const otherOS = AVAILABLE_OS_IDS.filter((id) => id !== primaryOS);
   return (
     <section className="flex w-full flex-col items-center gap-5 rounded-2xl bg-primary p-6 text-center shadow-xl shadow-brand-600/10 ring-1 ring-brand-200 sm:p-8">
       <FeaturedIcon icon={Download01} theme="modern" color="brand" size="xl" />
@@ -111,16 +115,24 @@ function HelperGate({ onRecheck, rechecking }) {
         <h2 className="font-[family-name:var(--font-display)] text-2xl font-bold tracking-tight text-primary">{t('helper.gateTitle')}</h2>
         <p className="max-w-md text-md text-tertiary">{t('helper.gateText')}</p>
       </div>
+      {isMac && (
+        <div role="status" className="flex max-w-sm items-start gap-2 rounded-xl bg-warning-primary p-3 text-left text-sm text-secondary ring-1 ring-amber-200 ring-inset">
+          <AlertCircle className="mt-0.5 size-4 shrink-0 text-fg-warning-primary" />
+          {t('helper.macComingSoon')}
+        </div>
+      )}
       <Button size="xl" color="primary" iconLeading={Download01} href={`/asistente/${primaryOS}`} className="w-full max-w-xs">
         {t('helper.download', { os: t(OS_LABEL_KEY[primaryOS]) })}
       </Button>
-      <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-1 text-sm">
-        {otherOS.map((id) => (
-          <a key={id} href={`/asistente/${id}`} className="font-semibold text-brand-secondary hover:underline">
-            {t(OS_LABEL_KEY[id])}
-          </a>
-        ))}
-      </div>
+      {otherOS.length > 0 && (
+        <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-1 text-sm">
+          {otherOS.map((id) => (
+            <a key={id} href={`/asistente/${id}`} className="font-semibold text-brand-secondary hover:underline">
+              {t(OS_LABEL_KEY[id])}
+            </a>
+          ))}
+        </div>
+      )}
       <Button size="sm" color="secondary" iconLeading={RefreshCw02} isLoading={rechecking} onPress={onRecheck}>
         {t('helper.recheck')}
       </Button>

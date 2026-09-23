@@ -222,6 +222,7 @@ export default {
     checking: 'Checking for the duokit Assistant...',
     gateTitle: 'Turn on fast downloads',
     gateText: 'To download you need the duokit Assistant: a small, free program you install once that makes your downloads run straight from your computer — faster, with no waiting your turn.',
+    macComingSoon: 'The Mac Assistant is on its way. For now, download it for Windows.',
     firstRunNote: 'The first time you download something, the Assistant sets itself up automatically (just once); it may take a bit longer than usual.',
     download: 'Download for {os}',
     otherOS: 'Other operating system',

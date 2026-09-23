@@ -36,11 +36,11 @@ export function useHelper() {
   return { available, recheck: () => setTick((t) => t + 1) };
 }
 
-// Heurística simple: no hay forma 100% confiable de saber Intel vs Apple Silicon desde el navegador, así que en
-// Mac se ofrece Apple Silicon primero (lo más común desde 2020) con un enlace aparte para Mac más viejas.
+// 'mac' es su propio caso: el instalador existe (se generó), pero sin firma de Apple macOS lo mata solo al
+// abrirlo — así que en vez de ofrecer una descarga que se ve rota, se avisa "próximamente" (ver Downloader.jsx).
 export function detectOS() {
   const ua = navigator.userAgent || '';
-  if (/Mac/i.test(ua)) return 'mac-apple-silicon';
+  if (/Mac/i.test(ua)) return 'mac';
   if (/Win/i.test(ua)) return 'windows';
   if (/Linux/i.test(ua)) return 'linux';
   return 'windows';
