@@ -412,7 +412,10 @@ app.use('/api/admin', adminRouter);
 // (por ejemplo, en desarrollo local), responde 404 en vez de tronar.
 const HELPER_DIST_DIR = path.join(process.env.DATA_DIR || path.join(__dirname, 'data'), 'helper-dist');
 const HELPER_FILES = {
-  windows: 'duokit-helper-windows.exe',
+  // Windows va como .zip (el .exe + yt-dlp.exe + ffmpeg.exe sueltos, ver helper/build.js) en vez de un solo .exe
+  // con esos binarios empacados adentro: ese patrón es justo lo que varios antivirus marcan como "dropper"
+  // sospechoso, a veces sin avisar nada y sin dejar rastro en el historial de Windows Defender.
+  windows: 'duokit-helper-windows.zip',
   'mac-apple-silicon': 'duokit-helper-mac-apple-silicon',
   'mac-intel': 'duokit-helper-mac-intel',
   linux: 'duokit-helper-linux',

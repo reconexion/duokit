@@ -103,13 +103,23 @@ function findOnPath(command) {
   return stdout.toString().trim().split(/\r?\n/)[0] || null;
 }
 
-// yt-dlp.exe/ffmpeg.exe vienen empacados DENTRO del instalador de Windows (helper/vendor/win32/, bajados con
-// fetch-vendor.sh antes de construirlo) — así el Asistente nunca necesita "descargar y ejecutar otro programa de
-// internet" al abrirse por primera vez, que es justo el patrón que los antivirus marcan como sospechoso (un
-// cliente reportó tener que desactivar el suyo para poder usarlo). Empacado con pkg (ver package.json → pkg.assets),
-// que dentro del ejecutable actúa como un archivo normal para fs.existsSync/copyFileSync.
+// yt-dlp.exe/ffmpeg.exe viajan SUELTOS, al lado del .exe, dentro del mismo .zip que se descarga del sitio (ver
+// build.js) — así el Asistente nunca necesita "descargar otro programa de internet" al abrirse por primera vez.
+//
+// OJO: antes iban empacados DENTRO del .exe como "assets" de pkg, y este mismo programa los sacaba de su propio
+// interior en cada arranque (fs.copyFileSync desde la snapshot virtual de pkg). Se cambió porque ese patrón —un
+// solo ejecutable que trae otros ejecutables empacados adentro y los deja listos para correr al abrirse— es
+// justo la firma clásica que un antivirus (no necesariamente Windows Defender; uno de terceros no deja rastro en
+// su historial) usa para marcar algo como "dropper" sospechoso, sin mostrar ninguna ventana de aviso: un cliente
+// reportó que el Asistente no abre ninguna ventana y el sitio nunca lo detecta, con el historial de Defender
+// limpio — encaja exactamente con ese tipo de bloqueo silencioso de un antivirus distinto a Defender.
 function copyBundled(name, dest) {
-  const bundled = path.join(__dirname, 'vendor', process.platform, name);
+  // Empacado con pkg (process.pkg existe): process.execPath es la ruta real en disco del .exe que se está
+  // ejecutando (no la snapshot virtual de pkg), y yt-dlp.exe/ffmpeg.exe viven sueltos justo a su lado.
+  // Sin empacar (node index.js en desarrollo): se busca en helper/vendor/<plataforma>/ como antes.
+  const bundled = process.pkg
+    ? path.join(path.dirname(process.execPath), name)
+    : path.join(__dirname, 'vendor', process.platform, name);
   if (!fs.existsSync(bundled)) return false;
   fs.copyFileSync(bundled, dest);
   return true;

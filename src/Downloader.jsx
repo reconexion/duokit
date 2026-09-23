@@ -125,6 +125,12 @@ function HelperGate({ onRecheck, rechecking }) {
         {t('helper.download', { os: t(OS_LABEL_KEY[primaryOS]) })}
       </Button>
       {primaryOS === 'windows' && (
+        <div role="note" className="flex max-w-sm flex-col gap-1 rounded-xl bg-secondary p-3 text-left text-sm text-secondary ring-1 ring-secondary ring-inset">
+          <p className="font-semibold text-primary">{t('helper.windowsZipTitle')}</p>
+          <p>{t('helper.windowsZipText')}</p>
+        </div>
+      )}
+      {primaryOS === 'windows' && (
         <div role="note" className="flex max-w-sm flex-col gap-1 rounded-xl bg-brand-primary p-3 text-left text-sm text-secondary ring-1 ring-brand-200 ring-inset">
           <p className="font-semibold text-primary">{t('helper.windowsWarningTitle')}</p>
           <p>{t('helper.windowsWarningText')}</p>

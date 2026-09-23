@@ -223,6 +223,8 @@ export default {
     gateTitle: 'Turn on fast downloads',
     gateText: 'To download you need the duokit Assistant: a small, free program you install once that makes your downloads run straight from your computer — faster, with no waiting your turn.',
     macComingSoon: 'The Mac Assistant is on its way. For now, download it for Windows.',
+    windowsZipTitle: 'It downloads as a .zip',
+    windowsZipText: 'Right-click the downloaded file → "Extract All". You\'ll see 3 files: keep them together, and double-click "duokit-helper-windows.exe".',
     windowsWarningTitle: 'Does Windows show a blue security warning?',
     windowsWarningText: 'That’s normal for new programs like this one, which don’t have many downloads yet. Click "More info" and then "Run anyway". The Assistant doesn’t install anything odd — it just makes your downloads faster.',
     firstRunNote: 'The first time you download something, the Assistant sets itself up automatically (just once); it may take a bit longer than usual.',
