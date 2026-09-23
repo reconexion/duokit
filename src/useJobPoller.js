@@ -25,7 +25,10 @@ export function useJobPoller() {
     }
   };
 
-  const start = (jobId, { onDone, onError } = {}) => {
+  // statusUrl/fetchImpl son opcionales: por defecto pregunta a nuestro propio backend (/api/status/:jobId, con
+  // sesión). El Asistente de escritorio (helper/) usa este mismo poller pero contra su propio servidor local
+  // (http://127.0.0.1:.../status/:jobId, sin sesión) — ver Downloader.jsx.
+  const start = (jobId, { onDone, onError, statusUrl = (id) => `/api/status/${id}`, fetchImpl = apiFetch } = {}) => {
     setIsRunning(true);
     setFiles([]);
     setPercent(0);
@@ -33,7 +36,7 @@ export function useJobPoller() {
 
     pollRef.current = setInterval(async () => {
       try {
-        const res = await apiFetch(`/api/status/${jobId}`);
+        const res = await fetchImpl(statusUrl(jobId));
         if (!res.ok) throw new Error(t('downloader.statusError'));
         const data = await res.json();
 

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   AlertCircle,
   CheckCircle,
@@ -8,6 +8,7 @@ import {
   Image01,
   Link01,
   MusicNote01,
+  RefreshCw02,
   Scissors01,
   VideoRecorder,
 } from '@untitledui/icons';
@@ -22,6 +23,7 @@ import { AnimatedCounter } from '@/components/ui/animated-counter';
 import { cx } from '@/utils/cx';
 import { apiFetch } from './api';
 import { useAuth } from './auth';
+import { detectOS, HELPER_URL, useHelper } from './useHelper';
 import { useI18n } from './i18n';
 import { useJobPoller } from './useJobPoller';
 
@@ -29,6 +31,13 @@ import { useJobPoller } from './useJobPoller';
 const VIDEO_HEIGHTS = { '480p': 480, '720p': 720, '1080p': 1080, '2K': 1440, '4K': 2160 };
 const AUDIO_QUALITY_OPTIONS = ['64k', '128k', '192k', '256k', '320k'].map((id) => ({ id, label: `${id}bps` }));
 const AUDIO_LANG_IDS = ['original', 'es', 'en', 'pt', 'fr', 'de', 'ja', 'ko', 'it', 'ru', 'hi', 'ar'];
+const OS_IDS = ['windows', 'mac-apple-silicon', 'mac-intel', 'linux'];
+const OS_LABEL_KEY = {
+  windows: 'helper.osWindows',
+  'mac-apple-silicon': 'helper.osMacAppleSilicon',
+  'mac-intel': 'helper.osMacIntel',
+  linux: 'helper.osLinux',
+};
 
 // "1:30" -> "00:01:30". Devuelve '' si está vacío y null si no es un tiempo válido.
 function normalizeTime(value) {
@@ -39,17 +48,6 @@ function normalizeTime(value) {
   const [s, m = 0, h = 0] = parts.map(Number).reverse();
   if (m > 59 || s > 59) return null;
   return [h, m, s].map((n) => String(n).padStart(2, '0')).join(':');
-}
-
-// Pide al navegador que descargue el archivo: aparece en su barra de descargas, listo para abrir.
-function startBrowserDownload(file) {
-  const link = document.createElement('a');
-  link.href = file.url;
-  link.download = file.name;
-  link.style.display = 'none';
-  document.body.appendChild(link);
-  link.click();
-  link.remove();
 }
 
 function SectionTitle({ children, aside }) {
@@ -100,6 +98,37 @@ function OptionTile({ icon: Icon, title, detail, isSelected, isDisabled, onChang
   );
 }
 
+// Se muestra cuando el Asistente de escritorio no contestó: hace falta instalarlo antes de poder descargar algo
+// (ver helper/ y backend/download-ticket.js — el servidor sigue decidiendo los límites, el Asistente solo ejecuta).
+function HelperGate({ onRecheck, rechecking }) {
+  const { t } = useI18n();
+  const primaryOS = detectOS();
+  const otherOS = OS_IDS.filter((id) => id !== primaryOS);
+  return (
+    <section className="flex w-full flex-col items-center gap-5 rounded-2xl bg-primary p-6 text-center shadow-xl shadow-brand-600/10 ring-1 ring-brand-200 sm:p-8">
+      <FeaturedIcon icon={Download01} theme="modern" color="brand" size="xl" />
+      <div className="flex flex-col gap-2">
+        <h2 className="font-[family-name:var(--font-display)] text-2xl font-bold tracking-tight text-primary">{t('helper.gateTitle')}</h2>
+        <p className="max-w-md text-md text-tertiary">{t('helper.gateText')}</p>
+      </div>
+      <Button size="xl" color="primary" iconLeading={Download01} href={`/asistente/${primaryOS}`} className="w-full max-w-xs">
+        {t('helper.download', { os: t(OS_LABEL_KEY[primaryOS]) })}
+      </Button>
+      <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-1 text-sm">
+        {otherOS.map((id) => (
+          <a key={id} href={`/asistente/${id}`} className="font-semibold text-brand-secondary hover:underline">
+            {t(OS_LABEL_KEY[id])}
+          </a>
+        ))}
+      </div>
+      <Button size="sm" color="secondary" iconLeading={RefreshCw02} isLoading={rechecking} onPress={onRecheck}>
+        {t('helper.recheck')}
+      </Button>
+      <p className="text-xs text-tertiary">{t('helper.firstRunNote')}</p>
+    </section>
+  );
+}
+
 export default function Downloader() {
   const { t } = useI18n();
   const [ytUrl, setYtUrl] = useState('');
@@ -114,7 +143,9 @@ export default function Downloader() {
   const [audioLang, setAudioLang] = useState('original');
   const [errors, setErrors] = useState({});
   const [failure, setFailure] = useState(null); // { friendly }
+  const [rechecking, setRechecking] = useState(false);
   const { user } = useAuth();
+  const { available: helperAvailable, recheck } = useHelper();
 
   const FILE_KIND = {
     mp4: { label: t('downloader.video'), icon: VideoRecorder },
@@ -136,21 +167,11 @@ export default function Downloader() {
   const wantsMedia = dlVid || dlAud;
   const isDone = !job.isRunning && job.files.length > 0;
 
-  // Al terminar, el navegador descarga solo cada archivo (con una pausa entre uno y otro, para que
-  // no los bloquee como descargas múltiples). Los temporizadores se limpian si el efecto se repite.
-  const startedRef = useRef(new Set());
   useEffect(() => {
-    if (!isDone) return undefined;
-    const timers = job.files
-      .filter((file) => !startedRef.current.has(file.url))
-      .map((file, index) =>
-        setTimeout(() => {
-          startedRef.current.add(file.url);
-          startBrowserDownload(file);
-        }, 200 + index * 900),
-      );
-    return () => timers.forEach(clearTimeout);
-  }, [isDone, job.files]);
+    if (!rechecking) return undefined;
+    const id = setTimeout(() => setRechecking(false), 1200);
+    return () => clearTimeout(id);
+  }, [rechecking]);
 
   const clearError = (key) => setErrors((prev) => ({ ...prev, [key]: undefined }));
 
@@ -186,39 +207,77 @@ export default function Downloader() {
     if (start) setTimeStart(start);
     if (end) setTimeEnd(end);
 
+    const payload = {
+      url,
+      downloadVideo: dlVid,
+      downloadAudio: dlAud,
+      downloadThumbnail: dlThumb,
+      videoQuality: qualVid,
+      audioQuality: qualAud,
+      audioLang,
+      startTime: start,
+      endTime: end,
+    };
+
+    // El servidor sigue siendo el único que decide si se puede descargar (límites del plan, tope diario...); el
+    // Asistente de escritorio (helper/) solo ejecuta lo que el servidor ya autorizó con este ticket firmado.
     try {
-      const res = await apiFetch('/api/download', {
+      const ticketRes = await apiFetch('/api/download-ticket', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          url,
-          downloadVideo: dlVid,
-          downloadAudio: dlAud,
-          downloadThumbnail: dlThumb,
-          videoQuality: qualVid,
-          audioQuality: qualAud,
-          audioLang,
-          startTime: start,
-          endTime: end,
-        }),
+        body: JSON.stringify(payload),
       });
+      if (!ticketRes.ok) {
+        const data = await ticketRes.json().catch(() => ({}));
+        const rejection = new Error(data.error || t('downloader.ticketError'));
+        rejection.ready = true;
+        throw rejection;
+      }
+      const { ticket } = await ticketRes.json();
 
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        // Mensaje del servidor (límite del plan, demasiado rápido...): ya viene listo para mostrarse.
+      const helperRes = await fetch(`${HELPER_URL}/download`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ticket }),
+      });
+      if (!helperRes.ok) {
+        const data = await helperRes.json().catch(() => ({}));
         const rejection = new Error(data.error || t('downloader.startError'));
         rejection.ready = true;
         throw rejection;
       }
-
-      const data = await res.json();
-      job.start(data.jobId, {
+      const { jobId } = await helperRes.json();
+      job.start(jobId, {
+        statusUrl: (id) => `${HELPER_URL}/status/${id}`,
+        fetchImpl: fetch,
         onError: (d) => setFailure({ friendly: d.error || t('downloader.genericJobError') }),
       });
     } catch (err) {
       setFailure({ friendly: err.ready ? err.message : t('downloader.connectionError') });
     }
   };
+
+  if (helperAvailable === null) {
+    return (
+      <section className="flex w-full flex-col items-center gap-3 rounded-2xl bg-primary p-8 text-center shadow-xl shadow-brand-600/10 ring-1 ring-brand-200">
+        <p className="text-sm text-tertiary" role="status" aria-live="polite">
+          {t('helper.checking')}
+        </p>
+      </section>
+    );
+  }
+
+  if (helperAvailable === false) {
+    return (
+      <HelperGate
+        rechecking={rechecking}
+        onRecheck={() => {
+          setRechecking(true);
+          recheck();
+        }}
+      />
+    );
+  }
 
   return (
     <section className="relative flex w-full flex-col gap-7 rounded-2xl bg-primary p-5 shadow-xl shadow-brand-600/10 ring-1 ring-brand-200 sm:p-8">
@@ -413,7 +472,6 @@ export default function Downloader() {
             <AnimatedCounter value={job.percent} suffix="%" className="font-semibold text-primary" />
           </div>
           <ProgressBar value={job.percent} />
-          <p className="text-xs text-tertiary">{t('downloader.keepTabOpen')}</p>
         </div>
       )}
 
@@ -428,14 +486,15 @@ export default function Downloader() {
         </div>
       )}
 
-      {/* Resultado */}
+      {/* Resultado: el Asistente ya guardó los archivos directo en la carpeta de Descargas de esta compu —
+          no hace falta que el navegador "descargue" nada más, ni hay nada que borrar en un servidor. */}
       {isDone && (
         <div className="flex flex-col gap-3 rounded-xl bg-success-primary p-4 ring-1 ring-green-200 ring-inset animate-in fade-in duration-300">
           <div className="flex items-center gap-2">
             <FeaturedIcon icon={CheckCircle} color="success" theme="light" size="sm" />
-            <p className="text-sm font-semibold text-success-primary">{t('downloader.doneTitle')}</p>
+            <p className="text-sm font-semibold text-success-primary">{t('downloader.doneTitleHelper')}</p>
           </div>
-          <p className="text-sm text-secondary">{t('downloader.doneText')}</p>
+          <p className="text-sm text-secondary">{t('downloader.doneTextHelper')}</p>
           <ul className="flex flex-col gap-2">
             {job.files.map((file) => {
               const { label, icon: Icon } = fileKind(file.name);
@@ -450,14 +509,10 @@ export default function Downloader() {
                       {label}
                     </Badge>
                   </span>
-                  <Button size="sm" color="secondary" iconLeading={Download01} href={file.url} download={file.name}>
-                    {t('downloader.save')}
-                  </Button>
                 </li>
               );
             })}
           </ul>
-          <p className="text-xs text-tertiary">{t('downloader.autoDelete')}</p>
         </div>
       )}
     </section>

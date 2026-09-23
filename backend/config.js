@@ -23,6 +23,10 @@ module.exports = {
   MERCADOPAGO_WEBHOOK_SECRET: (process.env.MERCADOPAGO_WEBHOOK_SECRET || '').trim(),
   // Dirección alternativa de la API de Mercado Pago: solo para pruebas (un Mercado Pago falso local), nunca en producción.
   MERCADOPAGO_API_BASE_URL: (process.env.MERCADOPAGO_API_BASE_URL || 'https://api.mercadopago.com').replace(/\/$/, ''),
+  // Clave privada (Ed25519, PEM) para firmar los tickets de descarga que usa el Asistente de escritorio (ver
+  // download-ticket.js y helper/). Tiene que ser SIEMPRE la que corresponde a la clave pública grabada en
+  // helper/ticket-key.js — si se cambia una, hay que volver a construir el Asistente con la clave pública nueva.
+  DOWNLOAD_TICKET_PRIVATE_KEY: (process.env.DOWNLOAD_TICKET_PRIVATE_KEY || '').replace(/\\n/g, '\n').trim(),
   SELLER: {
     // Alias público del negocio. Nunca pongas aquí un nombre real: aparece en recibos y en el panel.
     name: (process.env.SELLER_NAME || 'DuoKit').trim(),
