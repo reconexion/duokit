@@ -222,6 +222,8 @@ export default {
     gateTitle: 'Activa la descarga rápida',
     gateText: 'Para descargar necesitas el Asistente de duokit: un programa chiquito, gratis, que se instala una sola vez y hace que tus descargas salgan directo desde tu compu — más rápido y sin esperar tu turno.',
     macComingSoon: 'El Asistente para Mac está en camino. Por ahora, descárgalo para Windows.',
+    windowsWarningTitle: '¿Windows muestra un aviso azul de seguridad?',
+    windowsWarningText: 'Es normal en programas nuevos como este, que todavía no tienen muchas descargas. Dale clic en "Más información" y luego en "Ejecutar de todas formas". El Asistente no instala nada raro: solo hace tus descargas más rápidas.',
     firstRunNote: 'La primera vez que descargues algo, el Asistente prepara lo que necesita solo (una sola vez); puede tardar un poco más de lo normal.',
     download: 'Descargar para {os}',
     otherOS: 'Otro sistema operativo',

@@ -124,6 +124,12 @@ function HelperGate({ onRecheck, rechecking }) {
       <Button size="xl" color="primary" iconLeading={Download01} href={`/asistente/${primaryOS}`} className="w-full max-w-xs">
         {t('helper.download', { os: t(OS_LABEL_KEY[primaryOS]) })}
       </Button>
+      {primaryOS === 'windows' && (
+        <div role="note" className="flex max-w-sm flex-col gap-1 rounded-xl bg-brand-primary p-3 text-left text-sm text-secondary ring-1 ring-brand-200 ring-inset">
+          <p className="font-semibold text-primary">{t('helper.windowsWarningTitle')}</p>
+          <p>{t('helper.windowsWarningText')}</p>
+        </div>
+      )}
       {otherOS.length > 0 && (
         <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-1 text-sm">
           {otherOS.map((id) => (
