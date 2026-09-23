@@ -9,6 +9,9 @@ function strategyArgs(env = process.env) {
   if (env.YTDLP_PLAYER_CLIENT) args.push('--extractor-args', `youtube:player_client=${env.YTDLP_PLAYER_CLIENT}`);
   // Cookies de una cuenta de YouTube logueada, exportadas a un archivo (ver deploy/README.md). Nunca subas ese archivo a git.
   if (env.YTDLP_COOKIES_FILE) args.push('--cookies', env.YTDLP_COOKIES_FILE);
+  // Proxy residencial de pago, cuando YouTube bloquea la IP del servidor y ningún player_client lo arregla gratis.
+  // Formato que yt-dlp espera: http://usuario:contraseña@host:puerto (lo que da el proveedor, con protocolo al frente).
+  if (env.YTDLP_PROXY) args.push('--proxy', env.YTDLP_PROXY);
   // Argumentos sueltos para probar algo puntual sin tocar código (se separan por espacios; no acepta comillas).
   if (env.YTDLP_EXTRA_ARGS) args.push(...env.YTDLP_EXTRA_ARGS.split(/\s+/).filter(Boolean));
   return args;
