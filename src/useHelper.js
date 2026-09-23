@@ -18,18 +18,30 @@ async function pingHelper() {
   }
 }
 
+// Cada cuánto se vuelve a preguntar solo, mientras no se haya detectado el Asistente — así, si el cliente lo
+// instala y lo abre sin darle "verificar de nuevo", el sitio lo agarra solo en unos segundos, sin que tenga que
+// acordarse de ese botón (el botón sigue ahí para revisar al toque, sin esperar el siguiente ciclo).
+const AUTO_RECHECK_MS = 3000;
+
 export function useHelper() {
   const [available, setAvailable] = useState(null); // null = comprobando; true/false después
   const [tick, setTick] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
+    let timer;
+    const check = () => {
+      pingHelper().then((ok) => {
+        if (cancelled) return;
+        setAvailable(ok);
+        if (!ok) timer = setTimeout(check, AUTO_RECHECK_MS);
+      });
+    };
     setAvailable(null);
-    pingHelper().then((ok) => {
-      if (!cancelled) setAvailable(ok);
-    });
+    check();
     return () => {
       cancelled = true;
+      clearTimeout(timer);
     };
   }, [tick]);
 

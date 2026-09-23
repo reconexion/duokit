@@ -18,6 +18,25 @@ const { spawn } = require('child_process');
 const { PUBLIC_KEY_PEM } = require('./ticket-key');
 const ytdlpArgs = require('../backend/ytdlp-args');
 
+// En Windows, al abrir el .exe con doble clic, la ventana de la consola se cierra SOLA en cuanto el proceso
+// termina — si algo truena, nadie alcanza a leer el error (así se reportó: "una ventana negra aparece y se
+// cierra sola"). Esto atrapa cualquier error que no se haya manejado en ningún otro lado y deja la ventana
+// abierta con el mensaje, esperando una tecla, en vez de cerrarse de inmediato.
+function stayOpenOnError(err) {
+  console.error('\n❌ El Asistente de duokit encontró un error y no puede seguir:\n');
+  console.error(err && err.stack ? err.stack : err);
+  console.error('\nEscríbele esto a soporte. Presiona Enter para cerrar esta ventana...');
+  try {
+    process.stdin.resume();
+    process.stdin.once('data', () => process.exit(1));
+  } catch {
+    // Sin entrada estándar disponible (poco común): no hay más remedio que cerrar.
+    process.exit(1);
+  }
+}
+process.on('uncaughtException', stayOpenOnError);
+process.on('unhandledRejection', stayOpenOnError);
+
 const PORT = Number(process.env.DUOKIT_HELPER_PORT) || 47811;
 // Se acepta duokit.online (producción) y localhost (para que el propio duokit pruebe el Asistente en desarrollo).
 const ALLOWED_ORIGINS = new Set(['https://duokit.online', 'http://localhost:5173', 'http://localhost:5174']);
@@ -364,6 +383,20 @@ for (const signal of ['SIGINT', 'SIGTERM']) {
     process.exit(0);
   });
 }
+
+// Si el puerto ya está ocupado, lo más probable es que YA haya otra copia del Asistente corriendo (por ejemplo,
+// se abrió sin querer dos veces) — no es un error real, así que no truena la ventana con una pila de llamadas,
+// solo lo explica y espera.
+server.on('error', (err) => {
+  if (err.code === 'EADDRINUSE') {
+    console.log('El Asistente de duokit ya está corriendo (en otra ventana). No hace falta abrirlo otra vez.');
+    console.log('Presiona Enter para cerrar esta ventana...');
+    process.stdin.resume();
+    process.stdin.once('data', () => process.exit(0));
+    return;
+  }
+  stayOpenOnError(err);
+});
 
 server.listen(PORT, '127.0.0.1', () => {
   console.log(`Asistente de duokit escuchando en http://127.0.0.1:${PORT}`);
