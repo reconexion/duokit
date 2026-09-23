@@ -7,9 +7,9 @@
 // para la firma del webhook (WebhookSignatureValidator): es criptografía pura, sin red, y reimplementarla a mano
 // es fácil de hacer mal (el propio SDK de Mercado Pago para Java tuvo un bug ahí — issue #420 en su repo).
 //
-// NO PROBADO contra la API real de Mercado Pago (este entorno no tiene un pago real hecho de punta a punta).
-// Antes de vender de verdad, haz una compra completa con las credenciales reales y revisa que el webhook llegue
-// (deploy/RAILWAY.md tiene el checklist).
+// Probado contra la API real (crear preferencia devuelve 201 con un init_point de verdad; ver isPublicUrl más
+// abajo para el detalle de auto_return en local). Falta lo que solo se puede probar con un dominio público de
+// verdad: que el webhook llegue con MERCADOPAGO_WEBHOOK_SECRET puesto (deploy/RAILWAY.md tiene el checklist).
 const { WebhookSignatureValidator, InvalidWebhookSignatureError } = require('mercadopago');
 const config = require('./config');
 const { PLANS } = require('./plans');
@@ -40,6 +40,13 @@ async function request(path, options = {}) {
 // métodos que tardan días en resolverse (como pagar en efectivo en OXXO), que no encajan con "tu cuenta está lista
 // al momento" que el sitio promete. Si algún día se quiere aceptar esos métodos, hay que rediseñar la pantalla de
 // "pago exitoso" para mostrar instrucciones de pago pendiente, no solo activar o no.
+// Mercado Pago rechaza auto_return si las back_urls no son un dominio público (nada de localhost/127.0.0.1) — ver
+// https://www.mercadopago.com.pe/developers/en/docs/checkout-pro-preferences/configure-back-urls. En local
+// (PUBLIC_URL apuntando a localhost) se omite auto_return: la preferencia se crea igual y se puede probar a mano
+// (entrar al init_point y pagar), solo que Mercado Pago no regresa solo al terminar. En producción, con un dominio
+// real en PUBLIC_URL, esto no aplica y el regreso es automático como siempre.
+const isPublicUrl = !/^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])(:|\/|$)/i.test(config.PUBLIC_URL);
+
 async function createPreference({ checkoutToken, plan }) {
   if (!enabled) throw new Error('Mercado Pago no está configurado (falta MERCADOPAGO_ACCESS_TOKEN en backend/.env).');
   const info = PLANS[plan];
@@ -51,7 +58,7 @@ async function createPreference({ checkoutToken, plan }) {
       external_reference: checkoutToken,
       notification_url: `${config.PUBLIC_URL}/api/webhook/mercadopago`,
       back_urls: { success: returnUrl, pending: returnUrl, failure: `${config.PUBLIC_URL}/pago?estado=cancelado` },
-      auto_return: 'approved',
+      ...(isPublicUrl ? { auto_return: 'approved' } : {}),
       binary_mode: true,
     }),
   });
