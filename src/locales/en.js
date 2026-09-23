@@ -220,6 +220,8 @@ export default {
   },
   helper: {
     checking: 'Checking for the duokit Assistant...',
+    mobileTitle: 'This needs a computer',
+    mobileText: 'For now duokit downloads from your own computer (Windows), so it\'s faster and you don\'t have to wait your turn. Open duokit.online from a computer to download.',
     gateTitle: 'Turn on fast downloads',
     gateText: 'To download you need the duokit Assistant: a small, free program you install once that makes your downloads run straight from your computer — faster, with no waiting your turn.',
     macComingSoon: 'The Mac Assistant is on its way. For now, download it for Windows.',

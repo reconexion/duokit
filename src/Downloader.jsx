@@ -98,6 +98,20 @@ function OptionTile({ icon: Icon, title, detail, isSelected, isDisabled, onChang
   );
 }
 
+// Se muestra en un celular: no hay ningún Asistente que instalar ahí (no existe versión para Android/iOS), así
+// que en vez de ofrecer una descarga rota (un .exe/.zip que el teléfono no puede abrir) se explica claro que hace
+// falta una computadora. Sin botón de "verificar de nuevo": en un celular nunca va a haber nada que detectar.
+function MobileGate() {
+  const { t } = useI18n();
+  return (
+    <section className="flex w-full flex-col items-center gap-3 rounded-2xl bg-primary p-8 text-center shadow-xl shadow-brand-600/10 ring-1 ring-brand-200">
+      <FeaturedIcon icon={AlertCircle} theme="modern" color="warning" size="xl" />
+      <h2 className="font-[family-name:var(--font-display)] text-xl font-bold tracking-tight text-primary">{t('helper.mobileTitle')}</h2>
+      <p className="max-w-sm text-md text-tertiary">{t('helper.mobileText')}</p>
+    </section>
+  );
+}
+
 // Se muestra cuando el Asistente de escritorio no contestó: hace falta instalarlo antes de poder descargar algo
 // (ver helper/ y backend/download-ticket.js — el servidor sigue decidiendo los límites, el Asistente solo ejecuta).
 function HelperGate({ onRecheck, rechecking }) {
@@ -169,7 +183,7 @@ export default function Downloader() {
   const [failure, setFailure] = useState(null); // { friendly }
   const [rechecking, setRechecking] = useState(false);
   const { user } = useAuth();
-  const { available: helperAvailable, recheck } = useHelper();
+  const { available: helperAvailable, recheck, isMobile } = useHelper();
 
   const FILE_KIND = {
     mp4: { label: t('downloader.video'), icon: VideoRecorder },
@@ -292,6 +306,7 @@ export default function Downloader() {
   }
 
   if (helperAvailable === false) {
+    if (isMobile) return <MobileGate />;
     return (
       <HelperGate
         rechecking={rechecking}

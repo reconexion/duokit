@@ -23,11 +23,25 @@ async function pingHelper() {
 // acordarse de ese botón (el botón sigue ahí para revisar al toque, sin esperar el siguiente ciclo).
 const AUTO_RECHECK_MS = 3000;
 
+// En un celular no hay ningún Asistente que instalar (no existe una versión para Android/iOS) — antes esto no se
+// distinguía y detectOS() caía en 'mac' (un iPhone trae "like Mac OS X" en su user-agent) o en 'linux' (Android
+// trae "Linux"), ofreciendo un botón para descargar un .exe/.zip que el teléfono jamás va a poder abrir: se veía
+// como un enlace roto y, además, el sitio se quedaba preguntando solo cada 3 segundos si algo contesta en
+// 127.0.0.1 para siempre, sin sentido en un celular.
+export function isMobile() {
+  return /iPhone|iPad|iPod|Android/i.test(navigator.userAgent || '');
+}
+
 export function useHelper() {
   const [available, setAvailable] = useState(null); // null = comprobando; true/false después
   const [tick, setTick] = useState(0);
+  const mobile = isMobile();
 
   useEffect(() => {
+    if (mobile) {
+      setAvailable(false);
+      return undefined;
+    }
     let cancelled = false;
     let timer;
     const check = () => {
@@ -43,9 +57,9 @@ export function useHelper() {
       cancelled = true;
       clearTimeout(timer);
     };
-  }, [tick]);
+  }, [tick, mobile]);
 
-  return { available, recheck: () => setTick((t) => t + 1) };
+  return { available, recheck: () => setTick((t) => t + 1), isMobile: mobile };
 }
 
 // 'mac' es su propio caso: el instalador existe (se generó), pero sin firma de Apple macOS lo mata solo al

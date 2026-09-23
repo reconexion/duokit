@@ -219,6 +219,8 @@ export default {
   },
   helper: {
     checking: 'Comprobando el Asistente de duokit...',
+    mobileTitle: 'Esto necesita una computadora',
+    mobileText: 'Por ahora duokit descarga desde tu propia compu (Windows), para que sea más rápido y no tengas que esperar tu turno. Entra a duokit.online desde una computadora para descargar.',
     gateTitle: 'Activa la descarga rápida',
     gateText: 'Para descargar necesitas el Asistente de duokit: un programa chiquito, gratis, que se instala una sola vez y hace que tus descargas salgan directo desde tu compu — más rápido y sin esperar tu turno.',
     macComingSoon: 'El Asistente para Mac está en camino. Por ahora, descárgalo para Windows.',
